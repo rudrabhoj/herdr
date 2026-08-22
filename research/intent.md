@@ -71,5 +71,5 @@ ruling) / PROPOSAL (my default, owner may override).
 - PROPOSAL: the Docker-based Linux matrix is the Linux verification gate; the
   owner may raise Docker Desktop memory (>= 4 GB) to let it run green, or
   accept the current "everything but the final 2.1 GB rustc" evidence.
-- PROPOSAL: `~/.local/share/herdr` as the home for the zig tarball / patched
-  lib copy / wrapper (XDG data dir); owner may prefer another location.
+- PROPOSAL (proceeding under it; owner may override): `~/.local/share/herdr`
+  as the home for the zig tarball / patched lib copy / wrapper (XDG data dir).

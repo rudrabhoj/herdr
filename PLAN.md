@@ -762,19 +762,23 @@ zoom, `p` joining `t/s/a` as the in-mode scope hop. No new machinery: one more
 
 ### Phase 8 - build_and_install.sh (source build + install for the fork)
 
-**Goal**: one script at the repo root that takes a fresh macOS or Linux box to
-`~/.local/bin/herdr` built from this checkout: Rust via rustup if missing, the
-right zig 0.15 for the vendored libghostty-vt, the binary installed, and
-`~/.local/bin` put on PATH for the user's shell. Supersedes the git-excluded
-`build_and_install_local.sh`.
+**Goal**: one script at the repo root that takes a fresh macOS or Linux glibc box
+to `~/.local/bin/herdr` built from this checkout: Rust via rustup if missing, the
+right zig 0.15 for the vendored libghostty-vt, the binary installed without ever
+leaving a broken one over a working install, and `~/.local/bin` put on PATH for
+the shell the user actually runs. Supersedes the git-excluded
+`build_and_install_local.sh`. Intent record: `research/intent.md`.
 
-**Verified facts (2026-08-22, this host: macOS 26.5.2, Xcode-beta 27.0 SDK +
-CLT 26.5 SDK, Docker Desktop 2 GB/2 CPU)**
+**Verified facts (2026-08-22/23, this host: macOS 26.5.2, Xcode-beta 27.0 SDK +
+CLT 26.5 SDK, Docker Desktop 2 GB/2 CPU; re-verified by the round-1 adversary)**
 - `build.rs` runs `$ZIG build ...` (falls back to `zig` on PATH); CI pins zig
-  0.15.2 (mlugg/setup-zig on Linux, `brew install zig@0.15` on macOS).
-  `rust-toolchain.toml` pins 1.96.1, so rustup fetches the exact toolchain on
-  first `cargo` call; no version logic belongs in the script. `cmake`/`ninja`
-  from CI are not herdr dependencies (absent from Cargo.lock).
+  0.15.2 (mlugg/setup-zig on Linux, `HOMEBREW_NO_AUTO_UPDATE=1 brew install
+  zig@0.15` on macOS). `rust-toolchain.toml` pins 1.96.1 and rustup honors it on
+  first `cargo` call - but ONLY a rustup-managed cargo does: a distro cargo
+  (debian bookworm ships cargo 0.66/rustc 1.63, which cannot even parse this
+  `Cargo.lock` v4) ignores the pin, so the script gates on `rustup`, not `cargo`,
+  and prepends `~/.cargo/bin`. `cmake`/`ninja` from CI are not herdr dependencies
+  (absent from Cargo.lock).
 - **The official zig 0.15.2 macOS tarball cannot link on current macOS.** Since
   Xcode 26.4 Apple's `libSystem.tbd` lists only `arm64e-macos` (no
   `arm64-macos`; true of both the CLT 26.5 and the Xcode-beta 27.0 SDK). zig
@@ -785,61 +789,99 @@ CLT 26.5 SDK, Docker Desktop 2 GB/2 CPU)**
   Zig on macOS". Proof: fresh-cache `zig build-exe hello.zig` exits 1 with the
   tarball, 0 with brew's zig; identical `zig ld` lines. A warm `~/.cache/zig`
   masks this completely (the build runner is a cache hit), so any macOS test
-  must use fresh `ZIG_GLOBAL_CACHE_DIR`/`ZIG_LOCAL_CACHE_DIR`.
-- The macOS 26 SDK INFINITY/libcxx problem from section 0 still applies on top:
-  a private patched copy of the lib dir (now under `~/.local/share/herdr`, never
-  the keg, keyed by `zig version`) plus a one-line wrapper exported as `ZIG`.
-- Linux: the official tarball is fine; the build additionally needs a C
-  compiler/linker for the Rust crates (`linker cc not found` otherwise) and `xz`
-  for the tarball. rustup's cargo on Alpine/musl also needs `libgcc`.
-- `fish_add_path -U` exits 1 when nothing was added; rustup's own profile edits
-  are skipped (`--no-modify-path`) and `~/.cargo/bin` is only prepended for the
-  run.
+  must use fresh `ZIG_GLOBAL_CACHE_DIR`/`ZIG_LOCAL_CACHE_DIR`. The brew formula
+  is `deprecate! 2027-04-15` / `disable! 2028-04-15`: after that date the macOS
+  branch stops working unless upstream has moved to zig 0.16 (herdrdev/herdr#285).
+- The macOS 26 SDK INFINITY/libcxx problem from section 0 still applies on top
+  (confirmed: unpatched brew zig fails `sub-compilation of libcxx ...
+  clamp_to_integral.h: use of undeclared identifier 'INFINITY'`): a private
+  patched copy of the lib dir (209 MB / 18,101 files, under
+  `~/.local/share/herdr`, never the keg, keyed by `zig version`) plus a one-line
+  wrapper exported as `ZIG`. Copies for superseded zig point releases are NOT
+  pruned - accepted, it is a cache; delete old `zig-lib-*-patched` dirs by hand.
+- Linux: the official tarball is fine (`zig-<arch>-linux-0.15.2.tar.xz`, 200 for
+  both arches; the pre-0.14 spelling 404s); the build additionally needs a C
+  compiler/linker for the Rust crates (`linker cc not found` otherwise) and
+  `xz` for the tarball. `need cc` runs on both platforms (macOS CLT can be
+  absent or its SDK broken, as `xcrun --show-sdk-version` is on this host today).
+- `install(1)` replaces atomically on macOS but GNU `install` unlinks first, so
+  the script installs to `.herdr.new` and `mv`s; macOS and Linux both leave a
+  running herdr process undisturbed (inode changes, confirmed both sides).
+- `$SHELL` is the passwd login shell, not the interactive one: on this host it
+  is `/bin/zsh` while the owner runs fish with a populated `fish_user_paths`
+  and no `~/.zshrc`. A `~/.config/fish` dir plus `fish` on PATH is the better
+  signal and is checked first. bash login shells read only the first of
+  `.bash_profile`/`.bash_login`/`.profile`, so on macOS an existing `.profile`
+  is appended to rather than shadowed by a new `.bash_profile`.
+- `fish_add_path -U` exits 1 when nothing was added (fish 4.8.1); rustup's own
+  profile edits are skipped (`--no-modify-path`).
+- After this script installs a fork build, herdr's in-app updater
+  (`src/update.rs` `auto_update`) will still offer upstream releases; accepting
+  one replaces the control-mode patch series. Do not accept in-app updates on a
+  fork build (section 0 already warns about `herdr update`).
 
 **Implement**
-1. [x] `build_and_install.sh`: tool preflight (`brew`+`perl` on macOS; `cc`+`xz`
-   on Linux; `curl`, `tar`) with "missing required tool: X" messages; rustup if
-   no cargo; macOS: `brew install zig@0.15` + patched lib copy + wrapper; Linux:
-   official tarball extracted atomically (temp dir then `mv`) into
-   `~/.local/share/herdr`; `cargo build --release --locked`; install; PATH by
-   `$SHELL` (fish universal var, zsh `~/.zshrc`, bash `~/.bash_profile` on macOS
-   / `~/.bashrc` on Linux, otherwise print the export line), duplicate-guarded,
-   skipped when already on PATH.
+1. [x] `build_and_install.sh`: tool preflight (`brew`+`perl` on macOS; `xz` on
+   Linux; `cc`, `curl`, `tar` everywhere) with "missing required tool: X"
+   messages; rustup if no `rustup`; macOS: `brew install zig@0.15` (no
+   auto-update) + patched lib copy (stale `.tmp` removed first, built in
+   `.tmp`, then `mv`) + wrapper; Linux: official tarball extracted into a
+   `mktemp` dir with an EXIT trap, then `mv`; `cargo build --release --locked`;
+   smoke-test `target/release/herdr --version` BEFORE touching the install;
+   install to `.herdr.new` and `mv`; PATH by detected shell (fish config dir
+   first, else `$SHELL`): fish universal var, zsh `~/.zshrc`, bash
+   `~/.bash_profile`-or-existing-`~/.profile` on macOS / `~/.bashrc` on Linux,
+   otherwise print the export line; exact-line duplicate guard; skipped when
+   already on PATH.
 
 **Stress-test strategy (how to test without touching the real system)**
 - Linux: Docker containers from clean images, script copied in and run as a
-  fresh user would (`debian:bookworm-slim`, `fedora:latest`, `alpine:3.21`;
-  `--platform linux/amd64` available via emulation for the x86_64 URL path).
-  Vary what is preinstalled (no curl, no cc, no xz) to exercise the preflight.
-- macOS (no containers): the real-system risks are the zig cache mirage and the
-  shell rc files. Run the script with fresh `ZIG_GLOBAL_CACHE_DIR` and
-  `ZIG_LOCAL_CACHE_DIR` (temp dirs); test the PATH section in isolation by
-  extracting it into a throwaway `$HOME` with `$SHELL` set to each shell and
-  rerun for idempotency. A fake `$HOME` is NOT valid for the full build (rustup,
-  cargo, and zig all key off it). Gold standard when wanted: a throwaway macOS
-  user (`sysadminctl -addUser`, needs sudo) or a Tart VM.
+  fresh user would (`debian:bookworm-slim`, `fedora:latest`; `--platform
+  linux/amd64` available via emulation for the x86_64 URL path). Vary what is
+  preinstalled (no curl, no cc, no xz) to exercise the preflight. The 2 GB
+  Docker cap kills the final `rustc` of the herdr crate (2.1 GB peak RSS), so
+  the install/PATH half is exercised with a stub `~/.cargo/bin/cargo` that
+  checks `$ZIG` and emits a fake `target/release/herdr` - real zig download,
+  real extraction, real install, real rc edits.
+- macOS (no containers): the real-system risks are the zig cache mirage, the
+  live `~/.local/bin/herdr`, and the shell rc files. Run the full script only
+  with fresh `ZIG_GLOBAL_CACHE_DIR`/`ZIG_LOCAL_CACHE_DIR`; test the PATH,
+  install, and zig sections in isolation by extracting them into a throwaway
+  `$HOME`/`DATA_DIR`/cwd with stub `cargo` and stub artifacts. A fake `$HOME`
+  is NOT valid for the full build (rustup, cargo, and zig all key off it). Gold
+  standard for the cold path: a throwaway macOS user (`sysadminctl -addUser`,
+  needs sudo) or a Tart VM.
 
 **Verify**
-- [x] macOS, fresh zig caches: full run builds libghostty from scratch
-      (1m17s), installs, `herdr --version` ok; rerun idempotent.
-- [x] PATH section: zsh/bash append once with guard; fish writes
-      `fish_user_paths`; unknown shell prints the hint; reruns no-op.
+- [x] macOS with brew zig and rustup already present, fresh zig caches: full
+      run builds libghostty from scratch (1m17s), installs, `herdr --version`
+      ok; rerun idempotent. This is NOT cold-machine coverage (see open item).
+- [x] Live-install gate: with a stub `cargo` producing a `target/release/herdr`
+      that exits 1, the build+install section exits 1 and the pre-existing
+      install still runs; with a good artifact it is replaced and no
+      `.herdr.new` remains.
+- [x] Zig section: a pre-existing `zig-lib-*-patched.tmp` (interrupted copy)
+      no longer traps the rerun; the patched header is present; rerun no-op.
+- [x] PATH section: detection - `$SHELL=/bin/zsh` with a `~/.config/fish` dir
+      takes the fish branch and writes `fish_user_paths`, no `.zshrc` created;
+      zsh appends once (exact-line guard: a pre-existing
+      `.local/bin/other` line no longer suppresses it); bash on macOS appends
+      to an existing `~/.profile` and creates `~/.bash_profile` only when
+      neither exists; unknown shell prints the hint; reruns no-op.
 - [x] Linux preflight: debian without a compiler stops at
       "missing required tool: cc" (no mid-script `command not found`).
-- [x] Linux, Docker matrix (debian:bookworm-slim, fedora:latest, alpine:3.21,
-      with cc/xz/curl; alpine also libgcc+build-base): rustup install, zig
-      tarball fetch, libghostty-vt build, and all 149 dependency crates succeed
-      on every image; the FINAL `rustc` of the herdr crate is SIGKILLed in all
-      three - including alone with `CARGO_BUILD_JOBS=1` - because Docker
-      Desktop here is capped at 2.0 GB while that single compile peaks at
-      2.1 GB RSS on the host. Environmental, not a script defect; a full Linux
-      pass needs Docker Desktop memory raised to >= 4 GB (user setting).
-- [ ] Linux end-to-end green once Docker memory is raised (rerun the matrix,
-      one container at a time). Alpine/musl builds identically up to that
-      point, so it is supported given `libgcc` + `build-base`; the script's
-      `need cc`/`need xz` messages name the missing tools.
-- [ ] Adversarial round via keemakr-long-yolo-harden-plan (needs a Herdr pane:
-      HERDR_ENV=1, intent record backfill).
+- [x] Linux stub-cargo harness, debian:bookworm-slim (stub `~/.cargo/bin/cargo`
+      checks `$ZIG`, emits a fake artifact): full script path twice - real zig
+      fetch, EXIT-trap leaves no `.zig-*` dir, install + atomic replace,
+      `~/.bashrc` gains exactly one line, second run is a no-op, exit 0 both.
+- [ ] Linux end-to-end compile (debian + fedora) once Docker Desktop memory is
+      raised to >= 4 GB (user setting); everything up to the final rustc is
+      already green on both. Alpine/musl is a NON-GOAL per the intent record
+      (earlier runs built identically up to the same point; not supported).
+- [ ] macOS cold path (no rustup, no brew zig, no `~/.local/bin`) - unverified;
+      needs a throwaway macOS user or a Tart VM. [needs a human or sudo]
+- [ ] Adversarial loop via keemakr-long-yolo-harden-plan
+      (`adv_convo_1787423967261/`) converged.
 
 ## 5. Decisions log / open questions
 
@@ -874,6 +916,16 @@ CLT 26.5 SDK, Docker Desktop 2 GB/2 CPU)**
   SwitchTab, spaces -> SwitchWorkspace, agents -> FocusAgent), reserved and
   hardwired. [Superseded the single-mode-era "tabs only" wording in the round-3
   audit; the scoped behavior is what Phase 6 shipped, documented, and tests.]
+- Phase 8 build script: brew `zig@0.15` over the official tarball on macOS
+  (tarball cannot link on Xcode 26.4+ SDKs; brew backports the fix; dated
+  deprecate/disable 2027/2028). `~/.local/share/herdr` as the toolchain home
+  (zig tarball, patched lib copy, wrapper) - proceeding under PROPOSAL, owner
+  may override (intent record, open item). Shell detection: `~/.config/fish`
+  dir first, then `$SHELL` (the passwd shell misdetects the owner's own Mac).
+  Smoke-test before install, atomic replace - the "never break my installed
+  herdr" ruling. The zig tarball is fetched WITHOUT a checksum (TLS plus
+  xz/tar integrity; the official installer does verify its binary) - a decision,
+  not an oversight. Alpine/musl and Windows are non-goals.
 - Open: whether upstream wants `control_*` flat keys or a `[keys.control]` table.
   Flat matches `navigate_*` precedent; a table reads better but changes the
   config-reference model walk. Decide at Discussion time; local build ships flat.
