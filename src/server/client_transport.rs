@@ -1130,6 +1130,70 @@ command = "lazygit"
     }
 
     #[test]
+    fn local_profile_round_trip_carries_scoped_mode_and_reorder_fields() {
+        let config: crate::config::Config = toml::from_str(
+            r#"
+[keys]
+tab_mode = "ctrl+t"
+pane_mode = "ctrl+p"
+control_down = "d"
+move_tab_left = "alt+i"
+"#,
+        )
+        .expect("valid config");
+        let profile_toml = config
+            .local_keybindings_profile_toml()
+            .expect("serializable profile");
+
+        let keybindings = parse_client_keybindings(ClientKeybindings::Local {
+            keys_toml: profile_toml,
+        })
+        .expect("valid client keybindings")
+        .expect("local profile");
+
+        assert!(keybindings
+            .keybinds
+            .tab_mode
+            .bindings
+            .iter()
+            .any(|binding| binding.label == "ctrl+t"));
+        assert!(keybindings
+            .keybinds
+            .control
+            .down
+            .bindings
+            .iter()
+            .any(|binding| binding.label == "d"));
+        assert!(keybindings
+            .keybinds
+            .move_tab_left
+            .bindings
+            .iter()
+            .any(|binding| binding.label == "alt+i"));
+        assert!(keybindings
+            .keybinds
+            .pane_mode
+            .bindings
+            .iter()
+            .any(|binding| binding.label == "ctrl+p"));
+        assert!(keybindings
+            .keybinds
+            .control
+            .zoom
+            .bindings
+            .iter()
+            .any(|binding| binding.label == "z"));
+        // Defaults survive the overlay too, not only user-set fields.
+        assert!(keybindings
+            .keybinds
+            .control
+            .scope_agents
+            .bindings
+            .iter()
+            .any(|binding| binding.label == "a"));
+    }
+
+    #[test]
     fn parse_client_keybindings_tolerates_disabled_bindings() {
         let keybindings = parse_client_keybindings(ClientKeybindings::Local {
             keys_toml: r#"

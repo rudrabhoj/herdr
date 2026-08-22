@@ -314,6 +314,115 @@
           "description": "Focus the pane to the right in navigate mode. Right arrow is always an alias."
         },
         {
+          "key": "keys.tab_mode",
+          "type": "keybinding",
+          "default": "\"prefix+t\"",
+          "description": "Enter tab mode (sticky tab management)."
+        },
+        {
+          "key": "keys.space_mode",
+          "type": "keybinding",
+          "default": "\"prefix+shift+s\"",
+          "description": "Enter space mode (sticky workspace management)."
+        },
+        {
+          "key": "keys.agent_mode",
+          "type": "keybinding",
+          "default": "\"prefix+a\"",
+          "description": "Enter agent mode (sticky agent navigation)."
+        },
+        {
+          "key": "keys.pane_mode",
+          "type": "keybinding",
+          "default": "\"prefix+f\"",
+          "description": "Enter pane mode (sticky pane management)."
+        },
+        {
+          "key": "keys.control_new",
+          "type": "keybinding",
+          "default": "\"n\"",
+          "description": "Mode key: create in the active scope (tabs/spaces; auto-directional split in panes)."
+        },
+        {
+          "key": "keys.control_rename",
+          "type": "keybinding",
+          "default": "\"r\"",
+          "description": "Mode key: rename in the active scope (tabs/spaces/panes)."
+        },
+        {
+          "key": "keys.control_close",
+          "type": "keybinding",
+          "default": "\"x\"",
+          "description": "Mode key: close in the active scope (tabs/spaces/panes)."
+        },
+
+        {
+          "key": "keys.control_previous",
+          "type": "keybinding",
+          "default": "\"h\"",
+          "description": "Mode key: previous tab (tabs scope) or focus pane left (panes scope)."
+        },
+        {
+          "key": "keys.control_next",
+          "type": "keybinding",
+          "default": "\"l\"",
+          "description": "Mode key: next tab (tabs scope) or focus pane right (panes scope)."
+        },
+        {
+          "key": "keys.control_up",
+          "type": "keybinding",
+          "default": "\"k\"",
+          "description": "Mode key: up the vertical list (spaces/agents) or focus pane up (panes)."
+        },
+        {
+          "key": "keys.control_down",
+          "type": "keybinding",
+          "default": "\"j\"",
+          "description": "Mode key: down the vertical list (spaces/agents) or focus pane down (panes)."
+        },
+        {
+          "key": "keys.control_move_back",
+          "type": "keybinding",
+          "default": "\"i\"",
+          "description": "Mode key: move the item back (tab left / workspace up / swap pane left)."
+        },
+        {
+          "key": "keys.control_move_forward",
+          "type": "keybinding",
+          "default": "\"o\"",
+          "description": "Mode key: move the item forward (tab right / workspace down / swap pane right)."
+        },
+        {
+          "key": "keys.control_scope_tabs",
+          "type": "keybinding",
+          "default": "\"t\"",
+          "description": "Tab/space/agent mode key: switch to the tabs scope."
+        },
+        {
+          "key": "keys.control_scope_spaces",
+          "type": "keybinding",
+          "default": "\"s\"",
+          "description": "Tab/space/agent mode key: switch to the spaces scope."
+        },
+        {
+          "key": "keys.control_scope_agents",
+          "type": "keybinding",
+          "default": "\"a\"",
+          "description": "Tab/space/agent mode key: switch to the agents scope."
+        },
+        {
+          "key": "keys.control_scope_panes",
+          "type": "keybinding",
+          "default": "\"p\"",
+          "description": "Tab/space/agent mode key: switch to the panes scope."
+        },
+        {
+          "key": "keys.control_zoom",
+          "type": "keybinding",
+          "default": "\"z\"",
+          "description": "Pane mode key: zoom the focused pane."
+        },
+        {
           "key": "keys.detach",
           "type": "keybinding",
           "default": "\"prefix+q\"",
@@ -356,6 +465,18 @@
           "description": "Focus the next agent shown in the agent panel. Unset by default."
         },
         {
+          "key": "keys.move_workspace_up",
+          "type": "keybinding",
+          "default": "unset",
+          "description": "Move the selected workspace up one sidebar position. Unset by default."
+        },
+        {
+          "key": "keys.move_workspace_down",
+          "type": "keybinding",
+          "default": "unset",
+          "description": "Move the selected workspace down one sidebar position. Unset by default."
+        },
+        {
           "key": "keys.focus_agent",
           "type": "keybinding",
           "default": "unset",
@@ -390,6 +511,18 @@
           "type": "keybinding",
           "default": "\"prefix+n\"",
           "description": "Select the next tab."
+        },
+        {
+          "key": "keys.move_tab_left",
+          "type": "keybinding",
+          "default": "unset",
+          "description": "Move the focused tab one position left. Unset by default."
+        },
+        {
+          "key": "keys.move_tab_right",
+          "type": "keybinding",
+          "default": "unset",
+          "description": "Move the focused tab one position right. Unset by default."
         },
         {
           "key": "keys.switch_tab",

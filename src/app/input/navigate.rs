@@ -48,6 +48,7 @@ pub(crate) enum ActionContext {
     Direct,
     Prefix,
     Navigate,
+    Control,
 }
 
 impl App {
@@ -272,6 +273,8 @@ impl App {
                     leave_navigate_mode(&mut self.state);
                 }
             }
+            NavigateAction::MoveWorkspaceUp => self.move_workspace_in_root_order(context, -1),
+            NavigateAction::MoveWorkspaceDown => self.move_workspace_in_root_order(context, 1),
             NavigateAction::PreviousAgent => {
                 if let Some((idx, ws_idx, pane_id)) = self.relative_agent_entry(false) {
                     self.focus_pane_internal_via_api(ws_idx, pane_id);
@@ -318,6 +321,16 @@ impl App {
                 if let Some(tab_idx) = self.relative_tab(1) {
                     self.focus_tab_idx_via_api(tab_idx);
                     leave_navigate_mode(&mut self.state);
+                }
+            }
+            NavigateAction::MoveTabLeft => {
+                if let Some((ws_idx, source, insert)) = focused_tab_move(&self.state, -1) {
+                    self.move_tab_via_api(ws_idx, source, insert);
+                }
+            }
+            NavigateAction::MoveTabRight => {
+                if let Some((ws_idx, source, insert)) = focused_tab_move(&self.state, 1) {
+                    self.move_tab_via_api(ws_idx, source, insert);
                 }
             }
             NavigateAction::CloseTab => {
@@ -383,6 +396,20 @@ impl App {
                 leave_navigate_mode(&mut self.state);
             }
             NavigateAction::EnterResizeMode => self.state.mode = Mode::Resize,
+            NavigateAction::EnterTabMode
+            | NavigateAction::EnterSpaceMode
+            | NavigateAction::EnterAgentMode
+            | NavigateAction::EnterPaneMode => {
+                if self.state.view.layout == crate::app::state::ViewLayout::Mobile {
+                    // Mobile has no bar row for a desktop-style mode; the panel
+                    // is the equivalent affordance, matching WorkspacePicker.
+                    self.state.mobile_switcher_scroll = 0;
+                    self.state.mode = Mode::Navigate;
+                } else {
+                    self.state.control_scope = control_scope_for_entry(action);
+                    self.state.mode = Mode::Control;
+                }
+            }
             NavigateAction::ToggleSidebar => {
                 self.state.sidebar_collapsed = !self.state.sidebar_collapsed;
                 leave_navigate_mode(&mut self.state);
@@ -501,6 +528,42 @@ impl App {
                 insert_index: insert_idx,
             },
         );
+    }
+
+    fn move_workspace_in_root_order(&mut self, context: ActionContext, delta: isize) {
+        let Some(source_ws_idx) = workspace_action_target(&self.state, context) else {
+            return;
+        };
+        let Some(drop_target) = workspace_root_move_target(&self.state, source_ws_idx, delta)
+        else {
+            return;
+        };
+        let Some(params) = self
+            .state
+            .workspace_move_block_params(source_ws_idx, drop_target)
+        else {
+            return;
+        };
+        if self
+            .state
+            .workspaces
+            .get(source_ws_idx)
+            .is_some_and(|workspace| workspace.worktree_space().is_some())
+        {
+            self.move_workspace_block_via_api(params);
+            return;
+        }
+        let insert_idx = params
+            .before_workspace_id
+            .as_ref()
+            .and_then(|id| {
+                self.state
+                    .workspaces
+                    .iter()
+                    .position(|workspace| workspace.id == *id)
+            })
+            .unwrap_or(self.state.workspaces.len());
+        self.move_workspace_via_api(source_ws_idx, insert_idx);
     }
 
     pub(crate) fn focus_pane_internal_via_api(
@@ -1153,7 +1216,7 @@ pub(crate) fn command_for_key(
         .cloned()
 }
 
-fn unmodified_digit_for_key(key: &TerminalKey) -> Option<char> {
+pub(super) fn unmodified_digit_for_key(key: &TerminalKey) -> Option<char> {
     ('1'..='9').find(|digit| {
         crate::config::terminal_key_matches_combo(
             key,
@@ -1346,10 +1409,14 @@ pub(crate) enum NavigateAction {
     NextWorkspace,
     PreviousAgent,
     NextAgent,
+    MoveWorkspaceUp,
+    MoveWorkspaceDown,
     NewTab,
     RenameTab,
     PreviousTab,
     NextTab,
+    MoveTabLeft,
+    MoveTabRight,
     CloseTab,
     RenamePane,
     FocusPaneLeft,
@@ -1367,6 +1434,10 @@ pub(crate) enum NavigateAction {
     CopyMode,
     Zoom,
     EnterResizeMode,
+    EnterTabMode,
+    EnterSpaceMode,
+    EnterAgentMode,
+    EnterPaneMode,
     ToggleSidebar,
     CyclePaneNext,
     CyclePanePrevious,
@@ -1391,6 +1462,10 @@ fn copy_mode_survives_prefix_action(action: NavigateAction) -> bool {
             | NavigateAction::NextAgent
             | NavigateAction::PreviousTab
             | NavigateAction::NextTab
+            | NavigateAction::MoveWorkspaceUp
+            | NavigateAction::MoveWorkspaceDown
+            | NavigateAction::MoveTabLeft
+            | NavigateAction::MoveTabRight
             | NavigateAction::FocusPaneLeft
             | NavigateAction::FocusPaneDown
             | NavigateAction::FocusPaneUp
@@ -1487,10 +1562,14 @@ fn non_indexed_action_for_key(
         (&kb.next_workspace, NavigateAction::NextWorkspace),
         (&kb.previous_agent, NavigateAction::PreviousAgent),
         (&kb.next_agent, NavigateAction::NextAgent),
+        (&kb.move_workspace_up, NavigateAction::MoveWorkspaceUp),
+        (&kb.move_workspace_down, NavigateAction::MoveWorkspaceDown),
         (&kb.new_tab, NavigateAction::NewTab),
         (&kb.rename_tab, NavigateAction::RenameTab),
         (&kb.previous_tab, NavigateAction::PreviousTab),
         (&kb.next_tab, NavigateAction::NextTab),
+        (&kb.move_tab_left, NavigateAction::MoveTabLeft),
+        (&kb.move_tab_right, NavigateAction::MoveTabRight),
         (&kb.close_tab, NavigateAction::CloseTab),
         (&kb.rename_pane, NavigateAction::RenamePane),
         (&kb.edit_scrollback, NavigateAction::EditScrollback),
@@ -1511,6 +1590,10 @@ fn non_indexed_action_for_key(
         (&kb.close_pane, NavigateAction::ClosePane),
         (&kb.zoom, NavigateAction::Zoom),
         (&kb.resize_mode, NavigateAction::EnterResizeMode),
+        (&kb.tab_mode, NavigateAction::EnterTabMode),
+        (&kb.space_mode, NavigateAction::EnterSpaceMode),
+        (&kb.agent_mode, NavigateAction::EnterAgentMode),
+        (&kb.pane_mode, NavigateAction::EnterPaneMode),
         (&kb.toggle_sidebar, NavigateAction::ToggleSidebar),
         (&kb.reload_config, NavigateAction::ReloadConfig),
         (
@@ -1661,6 +1744,43 @@ pub(super) fn execute_navigate_action_in_context(
             state.next_workspace();
             leave_navigate_mode(state);
         }
+        NavigateAction::MoveWorkspaceUp | NavigateAction::MoveWorkspaceDown => {
+            let delta = if action == NavigateAction::MoveWorkspaceUp {
+                -1
+            } else {
+                1
+            };
+            if let Some(source_ws_idx) = workspace_action_target(state, context) {
+                if let Some(drop_target) = workspace_root_move_target(state, source_ws_idx, delta) {
+                    if let Some(params) =
+                        state.workspace_move_block_params(source_ws_idx, drop_target)
+                    {
+                        if state
+                            .workspaces
+                            .get(source_ws_idx)
+                            .is_some_and(|workspace| workspace.worktree_space().is_some())
+                        {
+                            state.move_workspace_block(
+                                &params.workspace_ids,
+                                params.before_workspace_id.as_deref(),
+                            );
+                        } else {
+                            let insert_idx = params
+                                .before_workspace_id
+                                .as_ref()
+                                .and_then(|id| {
+                                    state
+                                        .workspaces
+                                        .iter()
+                                        .position(|workspace| workspace.id == *id)
+                                })
+                                .unwrap_or(state.workspaces.len());
+                            state.move_workspace(source_ws_idx, insert_idx);
+                        }
+                    }
+                }
+            }
+        }
         NavigateAction::PreviousAgent => {
             state.previous_agent();
             leave_navigate_mode(state);
@@ -1687,6 +1807,16 @@ pub(super) fn execute_navigate_action_in_context(
         NavigateAction::NextTab => {
             state.next_tab();
             leave_navigate_mode(state);
+        }
+        NavigateAction::MoveTabLeft | NavigateAction::MoveTabRight => {
+            let delta = if action == NavigateAction::MoveTabLeft {
+                -1
+            } else {
+                1
+            };
+            if let Some((ws_idx, source, insert)) = focused_tab_move(state, delta) {
+                state.workspaces[ws_idx].move_tab(source, insert);
+            }
         }
         NavigateAction::CloseTab => {
             if !state.close_tab() {
@@ -1742,6 +1872,18 @@ pub(super) fn execute_navigate_action_in_context(
             leave_navigate_mode(state);
         }
         NavigateAction::EnterResizeMode => state.mode = Mode::Resize,
+        NavigateAction::EnterTabMode
+        | NavigateAction::EnterSpaceMode
+        | NavigateAction::EnterAgentMode
+        | NavigateAction::EnterPaneMode => {
+            if state.view.layout == crate::app::state::ViewLayout::Mobile {
+                state.mobile_switcher_scroll = 0;
+                state.mode = Mode::Navigate;
+            } else {
+                state.control_scope = control_scope_for_entry(action);
+                state.mode = Mode::Control;
+            }
+        }
         NavigateAction::ToggleSidebar => {
             state.sidebar_collapsed = !state.sidebar_collapsed;
             leave_navigate_mode(state);
@@ -1782,7 +1924,9 @@ pub(super) fn execute_navigate_action_in_context(
 
 fn workspace_action_target(state: &AppState, context: ActionContext) -> Option<usize> {
     let idx = match context {
-        ActionContext::Direct | ActionContext::Prefix => state.active.unwrap_or(state.selected),
+        ActionContext::Direct | ActionContext::Prefix | ActionContext::Control => {
+            state.active.unwrap_or(state.selected)
+        }
         ActionContext::Navigate => state.selected,
     };
     (idx < state.workspaces.len()).then_some(idx)
@@ -1808,6 +1952,59 @@ fn workspace_can_start_worktree_action(
             .and_then(crate::workspace::git_space_metadata)
     });
     !git_space.is_some_and(|space| space.is_linked_worktree)
+}
+
+/// Gap-index arithmetic for `Workspace::move_tab`: moving right past the next
+/// tab means inserting at `source + 2`; `source + 1` recomputes to `source` and
+/// silently no-ops. Returns `None` at the edges so callers make no API call.
+fn focused_tab_move(state: &AppState, delta: isize) -> Option<(usize, usize, usize)> {
+    let ws_idx = state.active?;
+    let ws = state.workspaces.get(ws_idx)?;
+    let source = ws.active_tab_index();
+    let insert = if delta < 0 {
+        source.checked_sub(1)?
+    } else {
+        let insert = source + 2;
+        if insert > ws.tabs.len() {
+            return None;
+        }
+        insert
+    };
+    Some((ws_idx, source, insert))
+}
+
+/// Reorders among sidebar root entries; a group's children travel through the
+/// block ids that `workspace_move_block_params` collects, so "one step" always
+/// clears the entire neighboring group.
+fn workspace_root_move_target(
+    state: &AppState,
+    source_ws_idx: usize,
+    delta: isize,
+) -> Option<crate::app::state::WorkspaceDropTarget> {
+    let roots = crate::ui::workspace_list_entries_expanded(state)
+        .into_iter()
+        .filter_map(|entry| match entry {
+            crate::ui::WorkspaceListEntry::Workspace {
+                ws_idx,
+                indented: false,
+            } => Some(ws_idx),
+            crate::ui::WorkspaceListEntry::Workspace { .. } => None,
+        })
+        .collect::<Vec<_>>();
+    let pos = roots.iter().position(|ws_idx| *ws_idx == source_ws_idx)?;
+    if delta < 0 {
+        let target = pos.checked_sub(1)?;
+        Some(crate::app::state::WorkspaceDropTarget::Before(
+            roots[target],
+        ))
+    } else if pos + 1 >= roots.len() {
+        None
+    } else {
+        match roots.get(pos + 2) {
+            Some(next) => Some(crate::app::state::WorkspaceDropTarget::Before(*next)),
+            None => Some(crate::app::state::WorkspaceDropTarget::End),
+        }
+    }
 }
 
 fn leave_navigate_mode(state: &mut AppState) {
@@ -1836,7 +2033,16 @@ fn finish_custom_command_context(
     }
 }
 
-fn leave_command_mode(state: &mut AppState) {
+pub(super) fn control_scope_for_entry(action: NavigateAction) -> crate::app::state::ControlScope {
+    match action {
+        NavigateAction::EnterSpaceMode => crate::app::state::ControlScope::Spaces,
+        NavigateAction::EnterAgentMode => crate::app::state::ControlScope::Agents,
+        NavigateAction::EnterPaneMode => crate::app::state::ControlScope::Panes,
+        _ => crate::app::state::ControlScope::Tabs,
+    }
+}
+
+pub(super) fn leave_command_mode(state: &mut AppState) {
     if state.copy_mode_pane_is_focused() {
         state.mode = Mode::Copy;
     } else if state.active.is_some() {
@@ -3200,6 +3406,193 @@ navigate_pane_down = "ctrl+j"
         assert_eq!(app.state.selected, 0);
         assert_eq!(app.state.mode, Mode::ConfirmClose);
         assert_eq!(app.state.workspaces.len(), 2);
+    }
+
+    fn tab_order(app: &App) -> Vec<crate::layout::PaneId> {
+        app.state.workspaces[0]
+            .tabs
+            .iter()
+            .map(|tab| tab.root_pane)
+            .collect()
+    }
+
+    fn workspace_order(app: &App) -> Vec<String> {
+        app.state
+            .workspaces
+            .iter()
+            .map(|workspace| workspace.id.clone())
+            .collect()
+    }
+
+    #[test]
+    fn move_tab_actions_reorder_with_gap_insert_and_clamp_at_edges() {
+        let mut app = app_with_test_workspaces(&["ws"]);
+        app.state.workspaces[0].test_add_tab(Some("b"));
+        app.state.workspaces[0].test_add_tab(Some("c"));
+        app.state.ensure_test_terminals();
+        let start = tab_order(&app);
+        app.state.workspaces[0].active_tab = 1;
+        app.state.mode = Mode::Navigate;
+
+        app.execute_tui_navigate_action(NavigateAction::MoveTabRight, ActionContext::Navigate);
+        assert_eq!(tab_order(&app), vec![start[0], start[2], start[1]]);
+        // Focus follows the moved tab, re-derived by root-pane identity.
+        assert_eq!(app.state.workspaces[0].active_tab_index(), 2);
+        assert_eq!(app.state.mode, Mode::Navigate);
+        // The keyboard path shares the via_api seam, so the move emits an event.
+        assert!(app
+            .event_hub
+            .events_after(0)
+            .iter()
+            .any(|(_, event)| matches!(
+                event.data,
+                crate::api::schema::EventData::TabMoved { .. }
+            )));
+
+        app.execute_tui_navigate_action(NavigateAction::MoveTabRight, ActionContext::Navigate);
+        assert_eq!(tab_order(&app), vec![start[0], start[2], start[1]]);
+
+        app.execute_tui_navigate_action(NavigateAction::MoveTabLeft, ActionContext::Navigate);
+        assert_eq!(tab_order(&app), vec![start[0], start[1], start[2]]);
+        assert_eq!(app.state.workspaces[0].active_tab_index(), 1);
+
+        app.state.workspaces[0].active_tab = 0;
+        app.execute_tui_navigate_action(NavigateAction::MoveTabLeft, ActionContext::Navigate);
+        assert_eq!(tab_order(&app), vec![start[0], start[1], start[2]]);
+    }
+
+    #[test]
+    fn move_workspace_actions_move_worktree_groups_as_blocks() {
+        let mut app = app_with_test_workspaces(&["parent", "child", "solo"]);
+        mark_worktree_space_member(&mut app.state, 0, "grp");
+        mark_worktree_space_member(&mut app.state, 1, "grp");
+        let start = workspace_order(&app);
+        app.state.active = Some(0);
+        app.state.selected = 0;
+        app.state.mode = Mode::Navigate;
+
+        app.execute_tui_navigate_action(NavigateAction::MoveWorkspaceDown, ActionContext::Navigate);
+        assert_eq!(
+            workspace_order(&app),
+            vec![start[2].clone(), start[0].clone(), start[1].clone()],
+            "group stays adjacent while moving past the standalone workspace"
+        );
+
+        let parent_idx = app
+            .state
+            .workspaces
+            .iter()
+            .position(|workspace| workspace.id == start[0])
+            .expect("parent still present");
+        app.state.active = Some(parent_idx);
+        app.state.selected = parent_idx;
+        app.execute_tui_navigate_action(NavigateAction::MoveWorkspaceUp, ActionContext::Navigate);
+        assert_eq!(workspace_order(&app), start);
+
+        app.state.active = Some(0);
+        app.state.selected = 0;
+        app.execute_tui_navigate_action(NavigateAction::MoveWorkspaceUp, ActionContext::Navigate);
+        assert_eq!(workspace_order(&app), start, "top edge is a no-op");
+
+        app.state.active = Some(1);
+        app.state.selected = 1;
+        app.execute_tui_navigate_action(NavigateAction::MoveWorkspaceDown, ActionContext::Navigate);
+        assert_eq!(
+            workspace_order(&app),
+            start,
+            "linked worktree children refuse to move, matching the drag path"
+        );
+    }
+
+    #[test]
+    fn move_workspace_actions_reorder_standalone_workspaces() {
+        let mut app = app_with_test_workspaces(&["a", "b", "c"]);
+        let start = workspace_order(&app);
+        app.state.active = Some(1);
+        app.state.selected = 1;
+        app.state.mode = Mode::Navigate;
+
+        app.execute_tui_navigate_action(NavigateAction::MoveWorkspaceDown, ActionContext::Navigate);
+        assert_eq!(
+            workspace_order(&app),
+            vec![start[0].clone(), start[2].clone(), start[1].clone()]
+        );
+        assert!(app
+            .event_hub
+            .events_after(0)
+            .iter()
+            .any(|(_, event)| matches!(
+                event.data,
+                crate::api::schema::EventData::WorkspaceMoved { .. }
+            )));
+
+        let b_idx = app
+            .state
+            .workspaces
+            .iter()
+            .position(|workspace| workspace.id == start[1])
+            .expect("workspace b still present");
+        app.state.active = Some(b_idx);
+        app.execute_tui_navigate_action(NavigateAction::MoveWorkspaceDown, ActionContext::Navigate);
+        assert_eq!(
+            workspace_order(&app),
+            vec![start[0].clone(), start[2].clone(), start[1].clone()],
+            "bottom edge is a no-op"
+        );
+
+        app.execute_tui_navigate_action(NavigateAction::MoveWorkspaceUp, ActionContext::Navigate);
+        assert_eq!(workspace_order(&app), start);
+    }
+
+    #[test]
+    fn reorder_actions_keep_invariants_on_adversarial_state() {
+        let mut state = AppState::test_with_adversarial_identity_state();
+        let mut terminal_runtimes = TerminalRuntimeRegistry::new();
+        for action in [
+            NavigateAction::MoveTabLeft,
+            NavigateAction::MoveTabRight,
+            NavigateAction::MoveWorkspaceUp,
+            NavigateAction::MoveWorkspaceDown,
+        ] {
+            execute_navigate_action_in_context(
+                &mut state,
+                &mut terminal_runtimes,
+                action,
+                ActionContext::Prefix,
+            );
+            state.assert_invariants_for_test();
+        }
+    }
+
+    #[test]
+    fn move_bindings_resolve_direct_and_prefix_dispatch() {
+        let mut state = state_with_workspaces(&["test"]);
+        state.keybinds.move_tab_left = crate::config::ActionKeybinds::direct("alt+i");
+        state.keybinds.move_tab_right = crate::config::ActionKeybinds::prefix("o");
+        state.keybinds.move_workspace_up = crate::config::ActionKeybinds::direct("alt+shift+i");
+
+        assert_eq!(
+            terminal_direct_navigation_action(
+                &state,
+                TerminalKey::new(KeyCode::Char('i'), KeyModifiers::ALT),
+            ),
+            Some(NavigateAction::MoveTabLeft)
+        );
+        assert_eq!(
+            terminal_direct_navigation_action(
+                &state,
+                TerminalKey::new(KeyCode::Char('i'), KeyModifiers::ALT | KeyModifiers::SHIFT),
+            ),
+            Some(NavigateAction::MoveWorkspaceUp)
+        );
+        assert_eq!(
+            action_for_key(
+                &state,
+                TerminalKey::new(KeyCode::Char('o'), KeyModifiers::empty()),
+                BindingDispatch::Prefix,
+            ),
+            Some(NavigateAction::MoveTabRight)
+        );
     }
 
     #[test]

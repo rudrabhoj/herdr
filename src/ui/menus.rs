@@ -256,6 +256,106 @@ pub(super) fn render_global_launcher_menu(app: &AppState, frame: &mut Frame) {
     }
 }
 
+pub(super) fn render_control_overlay(app: &AppState, frame: &mut Frame, area: Rect) {
+    let key = Style::default()
+        .fg(app.palette.accent)
+        .add_modifier(Modifier::BOLD);
+    let dim = Style::default().fg(app.palette.overlay0);
+    let mode_style = Style::default()
+        .fg(panel_contrast_fg(&app.palette))
+        .bg(app.palette.accent)
+        .add_modifier(Modifier::BOLD);
+
+    let kb = &app.keybinds.control;
+    let scope = app.control_scope;
+    let badge = match scope {
+        crate::app::state::ControlScope::Tabs => " TABS ",
+        crate::app::state::ControlScope::Spaces => " SPACES ",
+        crate::app::state::ControlScope::Agents => " AGENTS ",
+        crate::app::state::ControlScope::Panes => " PANES ",
+    };
+    let nav = match scope {
+        crate::app::state::ControlScope::Tabs => format!(
+            "{}/{}",
+            keybind_label(&kb.previous),
+            keybind_label(&kb.next)
+        ),
+        crate::app::state::ControlScope::Spaces | crate::app::state::ControlScope::Agents => {
+            format!("{}/{}", keybind_label(&kb.up), keybind_label(&kb.down))
+        }
+        crate::app::state::ControlScope::Panes => format!(
+            "{}/{}/{}/{}",
+            keybind_label(&kb.previous),
+            keybind_label(&kb.down),
+            keybind_label(&kb.up),
+            keybind_label(&kb.next)
+        ),
+    };
+    let mv = format!(
+        "{}/{}",
+        keybind_label(&kb.move_back),
+        keybind_label(&kb.move_forward)
+    );
+    let scopes = format!(
+        "{}/{}/{}/{}",
+        keybind_label(&kb.scope_tabs),
+        keybind_label(&kb.scope_spaces),
+        keybind_label(&kb.scope_agents),
+        keybind_label(&kb.scope_panes)
+    );
+
+    // Most-important clusters first: narrow terminals clip on the right like
+    // every other bar. Agent scope has no create/rename/close/move verbs.
+    let panes_scope = matches!(scope, crate::app::state::ControlScope::Panes);
+    let mut spans = vec![
+        Span::styled(badge, mode_style),
+        Span::raw(" "),
+        Span::styled(nav, key),
+        Span::styled(
+            if panes_scope {
+                " focus  "
+            } else {
+                " prev/next  "
+            },
+            dim,
+        ),
+    ];
+    if !panes_scope {
+        // Digits are deliberately inert in the panes scope (no visible pane
+        // ordinals), so the bar must not advertise them there.
+        spans.extend([Span::styled("1-9", key), Span::styled(" go  ", dim)]);
+    }
+    if !matches!(scope, crate::app::state::ControlScope::Agents) {
+        spans.extend([
+            Span::styled(mv, key),
+            Span::styled(if panes_scope { " swap  " } else { " move  " }, dim),
+            Span::styled(keybind_label(&kb.new), key),
+            Span::styled(if panes_scope { " split  " } else { " new  " }, dim),
+            Span::styled(keybind_label(&kb.rename), key),
+            Span::styled(" rename  ", dim),
+            Span::styled(keybind_label(&kb.close), key),
+            Span::styled(" close  ", dim),
+        ]);
+    }
+    if panes_scope {
+        spans.extend([
+            Span::styled(keybind_label(&kb.zoom), key),
+            Span::styled(" zoom  ", dim),
+        ]);
+    }
+    spans.extend([
+        Span::styled(scopes, key),
+        Span::styled(" tabs/spaces/agents/panes  ", dim),
+        Span::styled("esc", key),
+        Span::styled(" done", dim),
+    ]);
+    let line = Line::from(spans);
+
+    let overlay_y = area.y + area.height.saturating_sub(1);
+    let overlay_area = Rect::new(area.x, overlay_y, area.width, 1);
+    render_bottom_bar(frame, overlay_area, line, app.palette.panel_bg);
+}
+
 pub(super) fn render_resize_overlay(app: &AppState, frame: &mut Frame, area: Rect) {
     let key = Style::default()
         .fg(app.palette.accent)

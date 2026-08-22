@@ -822,6 +822,7 @@ pub enum Mode {
     Navigate,
     Prefix,
     Copy,
+    Control,
     Terminal,
     RenameWorkspace,
     RenameTab,
@@ -836,6 +837,17 @@ pub enum Mode {
     GlobalMenu,
     KeybindHelp,
     Navigator,
+}
+
+/// Which noun the control-mode keymap acts on. One internal mode
+/// (`Mode::Control`) presents as three user-facing modes: TABS, SPACES, AGENTS.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) enum ControlScope {
+    #[default]
+    Tabs,
+    Spaces,
+    Agents,
+    Panes,
 }
 
 impl Mode {
@@ -860,6 +872,7 @@ impl Mode {
                 | Mode::Navigate
                 | Mode::Navigator
                 | Mode::Copy
+                | Mode::Control
                 | Mode::Resize
                 | Mode::ConfirmClose
                 | Mode::ConfirmRemoveWorktree
@@ -1367,6 +1380,7 @@ pub struct AppState {
     pub(crate) previous_pane_focus: Option<PaneFocusTarget>,
     pub selected: usize,
     pub mode: Mode,
+    pub(crate) control_scope: ControlScope,
     pub should_quit: bool,
     /// In monolithic --no-session mode, detach exits the app because there is no server to detach from.
     pub detach_exits: bool,
@@ -1737,6 +1751,7 @@ impl AppState {
             previous_pane_focus: None,
             selected: 0,
             mode: Mode::Navigate,
+            control_scope: ControlScope::default(),
             should_quit: false,
             detach_exits: false,
             detach_requested: false,

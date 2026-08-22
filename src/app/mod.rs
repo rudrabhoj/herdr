@@ -526,6 +526,7 @@ impl App {
             previous_pane_focus: None,
             selected,
             mode,
+            control_scope: crate::app::state::ControlScope::default(),
             should_quit: false,
             detach_exits: no_session,
             detach_requested: false,
@@ -1811,6 +1812,9 @@ impl App {
             Mode::Copy => {
                 self.handle_copy_mode_key(key);
             }
+            Mode::Control => {
+                self.handle_control_key(key);
+            }
             Mode::RenameWorkspace | Mode::RenameTab | Mode::RenamePane => {
                 self.handle_rename_key_via_api(key_event);
             }
@@ -2113,6 +2117,7 @@ mod tests {
             Mode::Navigate,
             Mode::Navigator,
             Mode::Copy,
+            Mode::Control,
             Mode::Resize,
             Mode::ConfirmClose,
             Mode::ConfirmRemoveWorktree,

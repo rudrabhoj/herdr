@@ -189,12 +189,16 @@ const DEFAULT_CONFIG: &str = r##"# herdr configuration
 # next_workspace = ""     # optional, unset by default
 # previous_agent = ""     # optional, unset by default
 # next_agent = ""         # optional, unset by default
+# move_workspace_up = ""   # optional, unset by default; moves the selected workspace up
+# move_workspace_down = "" # optional, unset by default; moves the selected workspace down
 # focus_agent = ""        # optional indexed binding, e.g. "prefix+alt+1..9"
 # remote_image_paste = "ctrl+v" # only active in herdr --remote; empty disables raw-key image paste
 # new_tab = "prefix+c"
 # rename_tab = "prefix+shift+t"
 # previous_tab = "prefix+p"
 # next_tab = "prefix+n"
+# move_tab_left = ""      # optional, unset by default; moves the focused tab left
+# move_tab_right = ""     # optional, unset by default; moves the focused tab right
 # switch_tab = "prefix+1..9"
 # switch_workspace = ""   # optional indexed binding, e.g. "prefix+shift+1..9"
 # close_tab = "prefix+shift+x"
@@ -212,6 +216,10 @@ const DEFAULT_CONFIG: &str = r##"# herdr configuration
 # close_pane = "prefix+x"
 # zoom = "prefix+z"       # legacy alias: fullscreen
 # resize_mode = "prefix+r"
+# tab_mode = "prefix+t"
+# space_mode = "prefix+shift+s"
+# agent_mode = "prefix+a"
+# pane_mode = "prefix+f"
 # toggle_sidebar = "prefix+b"
 
 # Navigate-mode movement. These local shortcuts win while navigate mode is open.
@@ -222,6 +230,28 @@ const DEFAULT_CONFIG: &str = r##"# herdr configuration
 # navigate_pane_down = "j"
 # navigate_pane_up = "k"
 # navigate_pane_right = "l"     # right arrow always focuses the pane to the right
+
+# Tab/space/agent/pane mode keys. One sticky mode with four scopes: the same
+# verb letters act on tabs, workspaces, agents, or panes depending on the
+# active scope, and t/s/a/p switch scopes without leaving. esc/enter exit, the
+# prefix key chains into prefix mode, 1..9 switch within the scope (inert in
+# panes, which have no visible ordinals), and the arrow keys are reserved
+# (left/right tabs, up/down workspaces). Do not include prefix+, esc, enter,
+# arrows, or 1..9 here.
+# control_new = "n"          # tabs/spaces create; panes auto-directional split
+# control_rename = "r"       # tabs/spaces/panes
+# control_close = "x"        # tabs/spaces/panes
+# control_previous = "h"    # tabs row; panes focus left
+# control_next = "l"        # tabs row; panes focus right
+# control_up = "k"          # spaces/agents lists; panes focus up
+# control_down = "j"        # spaces/agents lists; panes focus down
+# control_move_back = "i"    # tab left / workspace up / swap pane left
+# control_move_forward = "o" # tab right / workspace down / swap pane right
+# control_zoom = "z"         # panes scope only
+# control_scope_tabs = "t"
+# control_scope_spaces = "s"
+# control_scope_agents = "a"
+# control_scope_panes = "p"
 
 # Custom commands use the same binding syntax.
 # type = "shell" runs detached in the background.

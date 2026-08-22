@@ -1288,7 +1288,7 @@ impl AppState {
         self.tab_bar_position == crate::config::TabBarPositionConfig::Bottom
             && matches!(
                 self.mode,
-                Mode::Navigate | Mode::Prefix | Mode::Copy | Mode::Resize
+                Mode::Navigate | Mode::Prefix | Mode::Copy | Mode::Control | Mode::Resize
             )
             && self.on_tab_bar(col, row)
     }
@@ -3568,6 +3568,26 @@ mod tests {
 
         assert_eq!(app.state.workspaces[0].active_tab, 0);
         assert_eq!(app.state.workspaces[0].tabs.len(), 2);
+
+        app.state.mode = Mode::Control;
+        app.handle_mouse(mouse(
+            MouseEventKind::Down(MouseButton::Left),
+            second_tab.x,
+            second_tab.y,
+        ));
+        app.handle_mouse(mouse(
+            MouseEventKind::Up(MouseButton::Left),
+            second_tab.x,
+            second_tab.y,
+        ));
+        app.handle_mouse(mouse(
+            MouseEventKind::Down(MouseButton::Left),
+            new_tab.x,
+            new_tab.y,
+        ));
+        assert_eq!(app.state.workspaces[0].active_tab, 0);
+        assert_eq!(app.state.workspaces[0].tabs.len(), 2);
+        assert_eq!(app.state.mode, Mode::Control);
         assert!(app.state.context_menu.is_none());
         assert!(app.state.tab_press.is_none());
         assert!(app.state.drag.is_none());

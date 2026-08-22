@@ -28,8 +28,9 @@ use self::dialogs::{
 };
 use self::keybind_help::render_keybind_help_overlay;
 use self::menus::{
-    render_context_menu, render_copy_mode_overlay, render_global_launcher_menu,
-    render_navigate_overlay, render_prefix_overlay, render_resize_overlay,
+    render_context_menu, render_control_overlay, render_copy_mode_overlay,
+    render_global_launcher_menu, render_navigate_overlay, render_prefix_overlay,
+    render_resize_overlay,
 };
 use self::mobile::{
     compute_mobile_header_hit_areas, is_mobile_width, mobile_switcher_max_scroll_for_height,
@@ -438,6 +439,7 @@ pub fn render_with_runtime_registry(
         Mode::Navigate => render_navigate_overlay(app, frame, mode_bar_area),
         Mode::Prefix => render_prefix_overlay(app, frame, mode_bar_area),
         Mode::Copy => render_copy_mode_overlay(app, frame, mode_bar_area),
+        Mode::Control => render_control_overlay(app, frame, mode_bar_area),
         Mode::Resize => render_resize_overlay(app, frame, mode_bar_area),
         Mode::ConfirmClose => {
             render_confirm_close_overlay(app, terminal_runtimes, frame, terminal_area)
@@ -838,6 +840,81 @@ mod tests {
             app.view.tab_bar_rect.y,
         );
         assert!(mode_row.contains("PREFIX"), "{mode_row}");
+    }
+
+    #[test]
+    fn scoped_mode_bars_render_for_both_tab_bar_positions_and_narrow_widths() {
+        let mut app = crate::app::state::AppState::test_new();
+        app.workspaces = vec![Workspace::test_new("one")];
+        app.active = Some(0);
+        app.selected = 0;
+        app.mode = Mode::Control;
+
+        // Top tab bar: the mode bar sits on the terminal area's last row.
+        compute_view(&mut app, Rect::new(0, 0, 106, 20));
+        let mut terminal = Terminal::new(TestBackend::new(106, 20)).unwrap();
+        terminal.draw(|frame| render(&app, frame)).unwrap();
+        let mode_row = buffer_row_text(
+            terminal.backend().buffer(),
+            app.view.terminal_area,
+            app.view.terminal_area.y + app.view.terminal_area.height - 1,
+        );
+        assert!(mode_row.contains("TABS"), "{mode_row}");
+        assert!(mode_row.contains("prev/next"), "{mode_row}");
+
+        // Bottom tab bar: the mode bar replaces the tab row.
+        app.tab_bar_position = crate::config::TabBarPositionConfig::Bottom;
+        compute_view(&mut app, Rect::new(0, 0, 106, 20));
+        let mut terminal = Terminal::new(TestBackend::new(106, 20)).unwrap();
+        terminal.draw(|frame| render(&app, frame)).unwrap();
+        let mode_row = buffer_row_text(
+            terminal.backend().buffer(),
+            app.view.tab_bar_rect,
+            app.view.tab_bar_rect.y,
+        );
+        assert!(mode_row.contains("TABS"), "{mode_row}");
+
+        // The other two scopes get their own badges and the vertical axis label.
+        app.tab_bar_position = crate::config::TabBarPositionConfig::Top;
+        for (scope, badge) in [
+            (crate::app::state::ControlScope::Spaces, "SPACES"),
+            (crate::app::state::ControlScope::Agents, "AGENTS"),
+            (crate::app::state::ControlScope::Panes, "PANES"),
+        ] {
+            app.control_scope = scope;
+            compute_view(&mut app, Rect::new(0, 0, 106, 20));
+            let mut terminal = Terminal::new(TestBackend::new(106, 20)).unwrap();
+            terminal.draw(|frame| render(&app, frame)).unwrap();
+            let mode_row = buffer_row_text(
+                terminal.backend().buffer(),
+                app.view.terminal_area,
+                app.view.terminal_area.y + app.view.terminal_area.height - 1,
+            );
+            assert!(mode_row.contains(badge), "{scope:?}: {mode_row}");
+            if matches!(scope, crate::app::state::ControlScope::Panes) {
+                // Panes: all four focus keys, zoom, and NO digit cluster
+                // (digits are deliberately inert without pane ordinals).
+                assert!(mode_row.contains("h/j/k/l"), "{scope:?}: {mode_row}");
+                assert!(mode_row.contains("zoom"), "{scope:?}: {mode_row}");
+                assert!(!mode_row.contains("1-9"), "{scope:?}: {mode_row}");
+            } else {
+                assert!(mode_row.contains("k/j"), "{scope:?}: {mode_row}");
+                assert!(!mode_row.contains("h/l"), "{scope:?}: {mode_row}");
+            }
+        }
+        app.control_scope = crate::app::state::ControlScope::Tabs;
+
+        // Narrow terminals clip on the right; the badge stays and nothing panics.
+        app.tab_bar_position = crate::config::TabBarPositionConfig::Top;
+        compute_view(&mut app, Rect::new(0, 0, 70, 12));
+        let mut terminal = Terminal::new(TestBackend::new(70, 12)).unwrap();
+        terminal.draw(|frame| render(&app, frame)).unwrap();
+        let mode_row = buffer_row_text(
+            terminal.backend().buffer(),
+            app.view.terminal_area,
+            app.view.terminal_area.y + app.view.terminal_area.height - 1,
+        );
+        assert!(mode_row.contains("TABS"), "{mode_row}");
     }
 
     #[test]

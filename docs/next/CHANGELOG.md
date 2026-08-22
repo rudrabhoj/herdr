@@ -3,6 +3,8 @@
 ## Unreleased
 
 ### Added
+- Tab, space, agent, and pane modes (`tab_mode` `prefix+t`, `space_mode` `prefix+shift+s`, `agent_mode` `prefix+a`, `pane_mode` `prefix+f`): four sticky keyboard modes sharing one configurable `control_*` verb keymap, each with its own bottom bar, covering switching, creating, renaming, closing, and reordering tabs and workspaces, agent navigation, and directional pane focus, auto-directional splits, swaps, and zoom, with in-mode scope switching on `t`/`s`/`a`/`p`.
+- Tabs and workspaces can now be reordered from the keyboard with the new `move_tab_left`, `move_tab_right`, `move_workspace_up`, and `move_workspace_down` bindings (unset by default); worktree groups move as a block, matching drag-and-drop.
 - Devin CLI, Cursor Agent CLI, MastraCode, Hermes Agent, and Grok CLI integrations now install and run natively on Windows.
 - Panes can now route normal right-click gestures to mouse-reporting applications through the pane menu, `herdr pane input`, `pane.input.set`, or the `pane split --right-click pane` launch option.
 - `theme.custom.sidebar_bg` can now give the desktop sidebar its own background without changing built-in theme defaults.
