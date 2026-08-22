@@ -1,0 +1,19 @@
+{
+  "target": "/Users/rudrabhojbhati/Dev/herdr/PLAN.md",
+  "scope": "Phase 8 - build_and_install.sh (the script /Users/rudrabhojbhati/Dev/herdr/build_and_install.sh, its verified-facts, stress-test strategy and verify gates). Phases 0-7 and the decisions log are converged prior scope (adv_convo1/2/3, pre-skill format) and out of bounds except where Phase 8 contradicts them.",
+  "created_at": "2026-08-22T18:39:27.261000Z",
+  "adversary": {
+    "name": "adv_1787423967261",
+    "kind": "claude"
+  },
+  "status": "open",
+  "round": 0,
+  "cap": 12,
+  "resumable": true,
+  "authorities": {
+    "artifacts": "/Users/rudrabhojbhati/Dev/herdr (repo; build_and_install.sh, build.rs, rust-toolchain.toml, .github/workflows/ci.yml, vendor/libghostty-vt)",
+    "intent": "/Users/rudrabhojbhati/Dev/herdr/research/intent.md",
+    "reference": "/Users/rudrabhojbhati/.claude-keemakr/skills/keemakr-long-yolo-harden-plan/references/reference-plan.md",
+    "reference_index": "/Users/rudrabhojbhati/.claude-keemakr/skills/keemakr-long-yolo-harden-plan/references/reference-plan-index.md"
+  }
+}
