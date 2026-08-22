@@ -99,7 +99,7 @@ esac
 # actually runs fish - and a ~/.config/fish dir survives a single `fish` run -
 # so add to fish when its config exists AND still edit the $SHELL rc. Over-adding
 # is cheap; a missing entry is the failure.
-if [ -d "$HOME/.config/fish" ] && command -v fish >/dev/null 2>&1; then
+if [ -d "${XDG_CONFIG_HOME:-$HOME/.config}/fish" ] && command -v fish >/dev/null 2>&1; then
     # fish_add_path exits 1 when nothing was added, so guard for reruns.
     fish -c "contains -- '$INSTALL_DIR' \$fish_user_paths; or fish_add_path -U '$INSTALL_DIR'"
     echo "$INSTALL_DIR is in fish_user_paths"
