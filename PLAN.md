@@ -843,6 +843,26 @@ CLT 26.5 SDK, Docker Desktop 2 GB/2 CPU; re-verified by the round-1 adversary)**
    `~/.bash_profile`-or-existing-`~/.profile` on macOS / `~/.bashrc` on Linux,
    otherwise print the export line; exact-line duplicate guard; skipped when
    already on PATH.
+2. [x] Config install (2026-08-23): `herdr.config.toml` at the repo root is the
+   fork's config template; the script renders it to herdr's config path
+   (`HERDR_CONFIG_PATH` > `XDG_CONFIG_HOME` > `~/.config`, same precedence as
+   `src/config/io.rs`) with `@DEFAULT_SHELL@` replaced by an absolute path
+   resolved on the installing machine (`command -v fish`, else empty so herdr
+   falls back to `$SHELL`). Motivation: the owner's `~/.config/herdr` was copied
+   Mac -> Linux with `default_shell = "/opt/homebrew/bin/fish"`; every pane spawn
+   failed, restore dropped all workspaces, and `ensure_default_workspace`
+   (src/app/mod.rs:1183, ticked from src/server/headless.rs:667) retried every
+   250 ms forever - the "stuck with no space" report. Only `config.toml` is
+   written; session.json, logs, sockets, release notes, plugin lock, and
+   agent-detection overrides are never read or copied. The rendered file is
+   validated with `herdr config check` (exits 1 on diagnostics) before it can
+   replace anything; an unchanged render is a no-op, a differing existing file is
+   kept as `config.toml.bak`; a running server gets `server reload-config`
+   best-effort; template popup commands missing from PATH print a note.
+   Verified by a stub-cargo sandbox harness (fresh home, rerun no-op, user-edited
+   config backed up, fish absent -> empty default_shell, broken template ->
+   exit 1 with existing config untouched and no `.config.toml.new` left) and by
+   a real run on the Gentoo host (`/usr/bin/fish` rendered, server reloaded).
 
 **Stress-test strategy (how to test without touching the real system)**
 - Linux: Docker containers from clean images, script copied in and run as a
@@ -945,6 +965,12 @@ script on the owner's Mac today)**
 11. `~/.local/share/herdr` is a PROPOSAL, not a ruling.
 12. Invoking the script through a symlink resolves the symlink's directory, not
     the repo (NIT, unfixed by choice).
+13. Config install prefers fish when it is on PATH (the template is tuned for
+    it); a fork user who has fish installed but does not use it gets fish panes
+    until they edit `default_shell`. `herdr config check` does not verify that
+    `default_shell` exists, so the script's `-x` test is the only guard.
+14. `config.toml.bak` holds one generation only; a second differing render
+    overwrites the previous backup.
 Convergence is NOT authorization to spend or ship; owner decisions (items 1-3
 of the order) stay in their own queue.
 

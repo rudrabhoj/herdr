@@ -90,6 +90,48 @@ install -m 755 target/release/herdr "$INSTALL_DIR/.herdr.new"
 mv "$INSTALL_DIR/.herdr.new" "$INSTALL_DIR/herdr"
 echo "installed to $INSTALL_DIR/herdr"
 
+# --- config -------------------------------------------------------------------
+# Render herdr.config.toml (the fork's template) into herdr's config path. Only
+# config.toml is written: session.json, logs, sockets, release notes, plugin
+# locks, and agent-detection overrides are per-machine private state and are
+# never read or copied. default_shell gets an absolute path resolved on THIS
+# machine (fish when installed - the template is tuned for it - else empty,
+# which makes herdr use $SHELL), so a brew-only or distro-only path never
+# travels between machines. Same precedence as herdr: HERDR_CONFIG_PATH, then
+# XDG_CONFIG_HOME, then ~/.config.
+cfg="${HERDR_CONFIG_PATH:-${XDG_CONFIG_HOME:-$HOME/.config}/herdr/config.toml}"
+shell="$(command -v fish 2>/dev/null || true)"
+[ -x "$shell" ] || { shell=""; echo "fish not found; default_shell left empty so herdr uses \$SHELL"; }
+install -d "$(dirname "$cfg")"
+new="$(dirname "$cfg")/.config.toml.new"
+# Pure-bash substitution: no sed/awk escaping rules for the path to trip over.
+while IFS= read -r line || [ -n "$line" ]; do
+    printf '%s\n' "${line//@DEFAULT_SHELL@/$shell}"
+done < herdr.config.toml > "$new"
+# Validate the rendered file with the binary that will read it before it can
+# replace a working config.
+if ! HERDR_CONFIG_PATH="$new" "$INSTALL_DIR/herdr" config check; then
+    rm -f "$new"
+    echo "herdr.config.toml renders to an invalid config; existing config left untouched" >&2
+    exit 1
+fi
+if cmp -s "$new" "$cfg"; then
+    rm -f "$new"
+    echo "config unchanged at $cfg"
+else
+    [ ! -f "$cfg" ] || { cp -p "$cfg" "$cfg.bak"; echo "previous config saved to $cfg.bak"; }
+    mv "$new" "$cfg"
+    echo "installed config to $cfg"
+    # A running server keeps its old config until told; best effort, no server is fine.
+    "$INSTALL_DIR/herdr" server reload-config >/dev/null 2>&1 || true
+fi
+# Popup commands in the template are resolved at use time, not here; say so now
+# instead of failing silently inside a popup later.
+grep -E '^command = "' herdr.config.toml | cut -d'"' -f2 | while read -r popup; do
+    command -v "${popup%% *}" >/dev/null 2>&1 \
+        || echo "note: $popup is not installed; its [[keys.command]] popup will fail until it is"
+done
+
 # --- PATH ---------------------------------------------------------------------
 case ":$PATH:" in
     *":$INSTALL_DIR:"*) exit 0 ;;
