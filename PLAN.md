@@ -875,8 +875,12 @@ CLT 26.5 SDK, Docker Desktop 2 GB/2 CPU; re-verified by the round-1 adversary)**
 - [x] PATH section, both directions: a `$SHELL=/bin/zsh` user with a
       `~/.config/fish` dir gets BOTH `fish_user_paths` and a `~/.zshrc` line
       (rerun: still one of each); a `$SHELL=fish` user gets `fish_user_paths`
-      only and no `.zshrc`/`.bash_profile`; a zsh user with no fish dir gets
-      `.zshrc` only. zsh appends once (exact-line guard: a pre-existing
+      only and no `.zshrc`/`.bash_profile`; a `$SHELL=fish` user whose fish
+      config lives under a custom `XDG_CONFIG_HOME` still gets `fish_user_paths`
+      (the check mirrors line 18's `${XDG_...:-default}` form); a zsh user with
+      no fish dir gets `.zshrc` only. If `fish -c` itself fails (read-only
+      `fish_variables`, fish < 3.2) `set -e` stops before the `$SHELL` rc is
+      edited - accepted, no error handling added. zsh appends once (exact-line guard: a pre-existing
       `.local/bin/other` line no longer suppresses it); bash on macOS appends
       to an existing `~/.profile` and creates `~/.bash_profile` only when
       neither exists; unknown shell prints the hint; reruns no-op.
