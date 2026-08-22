@@ -1,0 +1,96 @@
+# herdr config for this fork, tuned to mirror zellij muscle memory (prefix
+# ctrl+b, alt+N tabs, alt+hjkl focus) with Catppuccin Mocha.
+#
+# Template: build_and_install.sh renders it to ~/.config/herdr/config.toml and
+# fills @DEFAULT_SHELL@ with the absolute shell path it resolves on that
+# machine. Keep everything here machine-neutral; the file is public in the
+# fork, so no secrets or private paths.
+
+onboarding = false
+
+[theme]
+name = "catppuccin"
+
+[terminal]
+# Filled in by build_and_install.sh with the resolved absolute shell path so a
+# brew-only or distro-only path never leaks across machines. Empty means herdr
+# falls back to $SHELL.
+default_shell = "@DEFAULT_SHELL@"
+
+[keys]
+# Same prefix as the zellij tmux-mode binding.
+prefix = "ctrl+b"
+
+# Direct shortcuts matching zellij: alt+1..9 switches tabs, alt+hjkl moves focus.
+switch_tab = "alt+1..9"
+focus_pane_left = "alt+h"
+focus_pane_down = "alt+j"
+focus_pane_up = "alt+k"
+focus_pane_right = "alt+l"
+
+# Four sticky modes (local build feature), zellij-style: the same verb letters
+# (n/r/x new/rename/close, h/l + k/j nav, i/o reorder, 1-9 switch, z zoom in
+# panes) act on the active mode's noun, and t/s/a/p jump between
+# tabs/spaces/agents/panes without leaving. ctrl+t = tab mode (zellij tab-mode
+# key), ctrl+o = space mode (zellij session-mode key), ctrl+g = agent mode
+# (zellij lock-mode key, which herdr does not have), ctrl+p = pane mode
+# (zellij pane-mode key); skhd/omniwm only bind cmd-based chords so all four
+# reach herdr untouched. esc exits, ctrl+b chains into prefix mode.
+tab_mode = "ctrl+t"
+space_mode = "ctrl+o"
+agent_mode = "ctrl+g"
+pane_mode = "ctrl+p"
+
+# Single-chord sidebar toggle (zellij scroll-mode key, long unavailable to
+# panes anyway); prefix+b still works as the default fallback.
+toggle_sidebar = ["prefix+b", "ctrl+s"]
+
+# Direct reorder shortcuts matching zellij alt+i/alt+o (local build feature).
+move_tab_left = "alt+i"
+move_tab_right = "alt+o"
+
+# Tab ops keep the zellij tab-mode letters (there: ctrl+t then n/r/h/l).
+new_tab = "prefix+n"
+rename_tab = "prefix+r"
+previous_tab = "prefix+h"
+next_tab = "prefix+l"
+
+# rename_tab displaced resize mode from prefix+r, which displaced reload in turn.
+resize_mode = "prefix+shift+r"
+reload_config = "prefix+shift+c"
+
+# prefix+1..9 freed up by the alt tab bindings, so use it for workspaces.
+switch_workspace = "prefix+1..9"
+focus_agent = "prefix+alt+1..9"
+
+# zellij habits: d detaches (session mode), p toggles back to last pane (pane mode).
+detach = "prefix+d"
+last_pane = "prefix+p"
+
+[[keys.command]]
+key = "prefix+alt+g"
+type = "popup"
+command = "lazygit"
+width = "85%"
+height = "85%"
+
+[[keys.command]]
+key = "prefix+alt+b"
+type = "popup"
+command = "btop"
+width = "85%"
+height = "85%"
+
+[ui]
+# Mocha mauve.
+accent = "#cba6f7"
+
+# Matches pane_frames false in zellij; pane_gaps still separates splits.
+pane_borders = false
+hide_tab_bar_when_single_tab = true
+
+# zellij creates tabs immediately without prompting for a name.
+prompt_new_tab_name = false
+
+[ui.toast]
+delivery = "system"
