@@ -1,0 +1,112 @@
+#!/usr/bin/env bash
+# Build herdr from this checkout and install it to ~/.local/bin.
+#
+# - Installs Rust via rustup if cargo is missing (rust-toolchain.toml pins the
+#   exact toolchain; rustup fetches it on first use).
+# - Zig 0.15 for the vendored libghostty-vt (build.rs shells out to $ZIG).
+#   macOS uses Homebrew's zig@0.15: it backports the MachO linker fix for
+#   Xcode 26.4+ SDKs (libSystem.tbd only lists arm64e now), which the official
+#   0.15.2 tarball lacks, so the tarball cannot link on current macOS. Linux
+#   fetches the official tarball into ~/.local/share/herdr.
+# - Adds ~/.local/bin to PATH in your shell's config if it is not there yet.
+set -euo pipefail
+
+cd "$(dirname "$0")"
+
+ZIG_VERSION=0.15.2
+INSTALL_DIR="$HOME/.local/bin"
+DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/herdr"
+
+need() {
+    command -v "$1" >/dev/null 2>&1 || { echo "missing required tool: $1" >&2; exit 1; }
+}
+
+case "$(uname -s)" in
+    Darwin) os=macos; need brew; need perl ;;
+    Linux) os=linux; need cc; need xz ;;  # cc links the Rust crates; xz unpacks zig
+    *) echo "unsupported OS: $(uname -s)" >&2; exit 1 ;;
+esac
+need curl
+need tar
+
+# --- rust ---------------------------------------------------------------------
+if ! command -v cargo >/dev/null 2>&1; then
+    if [ ! -x "$HOME/.cargo/bin/cargo" ]; then
+        echo "cargo not found; installing Rust via rustup"
+        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --no-modify-path
+    fi
+    export PATH="$HOME/.cargo/bin:$PATH"
+fi
+
+# --- zig ----------------------------------------------------------------------
+mkdir -p "$DATA_DIR"
+if [ "$os" = macos ]; then
+    brew list zig@0.15 >/dev/null 2>&1 || brew install zig@0.15
+    zig_prefix="$(brew --prefix zig@0.15)"
+    zig_ver="$("$zig_prefix/bin/zig" version)"
+    # The macOS 26 SDK no longer exposes INFINITY to zig 0.15's bundled libcxx,
+    # which breaks the vendored build. Patch a private copy of the lib dir
+    # (never the brew keg) and point a wrapper at it; goes away when upstream
+    # moves to zig 0.16 (herdrdev/herdr#285).
+    ziglib="$DATA_DIR/zig-lib-$zig_ver-patched"
+    if [ ! -d "$ziglib" ]; then
+        echo "creating patched copy of zig $zig_ver lib dir at $ziglib"
+        cp -R "$zig_prefix/lib/zig" "$ziglib.tmp"
+        perl -0pi -e 's/_LIBCPP_BEGIN_NAMESPACE_STD/#ifndef INFINITY\n#  define INFINITY __builtin_inff()\n#endif\n\n_LIBCPP_BEGIN_NAMESPACE_STD/' \
+            "$ziglib.tmp/libcxx/include/__random/clamp_to_integral.h"
+        mv "$ziglib.tmp" "$ziglib"
+    fi
+    zig="$DATA_DIR/zig"
+    printf '#!/bin/sh\nexec "%s" "$@" --zig-lib-dir "%s"\n' "$zig_prefix/bin/zig" "$ziglib" > "$zig"
+    chmod +x "$zig"
+else
+    case "$(uname -m)" in
+        aarch64 | arm64) arch=aarch64 ;;
+        x86_64 | amd64) arch=x86_64 ;;
+        *) echo "unsupported arch: $(uname -m)" >&2; exit 1 ;;
+    esac
+    zig_dir="$DATA_DIR/zig-$arch-linux-$ZIG_VERSION"
+    if [ ! -x "$zig_dir/zig" ]; then
+        echo "fetching zig $ZIG_VERSION into $DATA_DIR"
+        tmp="$(mktemp -d "$DATA_DIR/.zig-XXXXXX")"
+        curl --proto '=https' --tlsv1.2 -sSfL \
+            "https://ziglang.org/download/$ZIG_VERSION/zig-$arch-linux-$ZIG_VERSION.tar.xz" \
+            | tar -xJ -C "$tmp"
+        mv "$tmp/zig-$arch-linux-$ZIG_VERSION" "$zig_dir"
+        rmdir "$tmp"
+    fi
+    zig="$zig_dir/zig"
+fi
+export ZIG="$zig"
+
+# --- build + install ----------------------------------------------------------
+cargo build --release --locked
+install -d "$INSTALL_DIR"
+install -m 755 target/release/herdr "$INSTALL_DIR/herdr"
+"$INSTALL_DIR/herdr" --version
+echo "installed to $INSTALL_DIR/herdr"
+
+# --- PATH ---------------------------------------------------------------------
+case ":$PATH:" in
+    *":$INSTALL_DIR:"*) exit 0 ;;
+esac
+
+line='export PATH="$HOME/.local/bin:$PATH"'
+case "$(basename "${SHELL:-}")" in
+    fish)
+        # fish_add_path exits 1 when nothing was added, so guard for reruns.
+        fish -c "contains -- '$INSTALL_DIR' \$fish_user_paths; or fish_add_path -U '$INSTALL_DIR'"
+        echo "$INSTALL_DIR is in fish_user_paths"
+        exit 0
+        ;;
+    zsh) rc="$HOME/.zshrc" ;;
+    bash) [ "$os" = macos ] && rc="$HOME/.bash_profile" || rc="$HOME/.bashrc" ;;
+    *)
+        echo "add $INSTALL_DIR to your PATH, e.g.: $line"
+        exit 0
+        ;;
+esac
+if ! grep -qsF '.local/bin' "$rc"; then
+    printf '\n%s\n' "$line" >> "$rc"
+    echo "added $INSTALL_DIR to PATH in $rc (open a new shell)"
+fi
