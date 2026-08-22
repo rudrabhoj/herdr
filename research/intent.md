@@ -68,8 +68,9 @@ ruling) / PROPOSAL (my default, owner may override).
   local build), any edits under /opt/homebrew.
 
 ## Open (owner may still rule)
-- PROPOSAL: the Docker-based Linux matrix is the Linux verification gate; the
-  owner may raise Docker Desktop memory (>= 4 GB) to let it run green, or
-  accept the current "everything but the final 2.1 GB rustc" evidence.
+- PROPOSAL (low stakes now): the Docker stub-cargo harness covers the Linux
+  install/PATH path under the 2 GB cap; only the final 2.1 GB rustc of the herdr
+  crate is unexercised in Docker. The owner may raise Docker Desktop memory
+  (>= 4 GB) for a full compile or accept that residual.
 - PROPOSAL (proceeding under it; owner may override): `~/.local/share/herdr`
   as the home for the zig tarball / patched lib copy / wrapper (XDG data dir).
