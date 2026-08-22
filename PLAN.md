@@ -899,8 +899,54 @@ CLT 26.5 SDK, Docker Desktop 2 GB/2 CPU; re-verified by the round-1 adversary)**
       (earlier runs built identically up to the same point; not supported).
 - [ ] macOS cold path (no rustup, no brew zig, no `~/.local/bin`) - unverified;
       needs a throwaway macOS user or a Tart VM. [needs a human or sudo]
-- [ ] Adversarial loop via keemakr-long-yolo-harden-plan
-      (`adv_convo_1787423967261/`) converged.
+- [x] Adversarial loop via keemakr-long-yolo-harden-plan
+      (`adv_convo_1787423967261/`): CONVERGED in round 4 (2026-08-23), both
+      judges agreeing.
+
+**Round log (adv_convo_1787423967261)**
+- r1: 1 BLOCKER (smoke test ran after the live install was overwritten), 4 MAJOR
+  (`.tmp` copy trap, distro cargo bypassing the toolchain pin, `$SHELL`
+  misdetecting fish, `[x]` overstating macOS coverage), 11 MINOR, 4 NIT - all
+  accepted; fixes verified by stub-cargo harnesses on both sides.
+- r2: 1 MAJOR (the fish fix inverted: a fish dir proves only that fish ran once -
+  now add to fish AND edit the `$SHELL` rc), 1 MINOR (`need cc` is a shim on
+  macOS; plan text corrected), 3 NIT - accepted.
+- r3: 1 MAJOR (fish check ignored `XDG_CONFIG_HOME`; one token) - accepted.
+- r4: all closed by the adversary's own re-runs; CONVERGED.
+
+**Accepted execution order for the open items**
+1. macOS cold path (no rustup, no brew zig, no `~/.local/bin`) via a throwaway
+   macOS user (`sysadminctl -addUser`) or a Tart VM - before pointing any fork
+   user at the script; it is the only residual that costs a stranger real time.
+2. Linux end-to-end compile (debian + fedora) once Docker Desktop memory is
+   raised to >= 4 GB; lower priority - the stub harness covers everything but
+   rustc's peak RSS and upstream CI compiles herdr on Linux every run.
+3. Owner ruling on `~/.local/share/herdr` as the toolchain home (currently a
+   PROPOSAL the script has committed to).
+
+**Residual-risk register (the live list; nothing below blocks running the
+script on the owner's Mac today)**
+1. macOS cold path never executed as a composition (highest).
+2. Linux end-to-end compile never completed on this host (2 GB Docker cap).
+3. `need cc` asserts nothing on macOS; CLT coverage rides on `need brew`.
+4. brew `zig@0.15` is deprecated 2027-04-15 / disabled 2028-04-15; the macOS
+   branch dies then unless herdr has moved to zig 0.16 (herdrdev/herdr#285).
+5. No checksum on the zig tarball (recorded decision; TLS + xz integrity).
+6. 209 MB per zig version accumulates under `~/.local/share/herdr`; manual prune.
+7. `fish -c` failure aborts before the `$SHELL` rc edit; an interrupt between
+   `install` and `mv` leaves a `.herdr.new` dotfile - both documented, no code.
+8. PATH-membership test is a literal substring match; a differently spelled
+   entry leads to a harmless duplicate (over-adding is cheap).
+9. herdr's in-app updater will offer upstream releases over a fork build -
+   human discipline, not script.
+10. "Replacing a running binary leaves the process intact" was verified with
+    `/bin/sleep`, not a live herdr from the target path; safe by construction
+    (`mv`), noted so the checkbox is not read as stronger than it is.
+11. `~/.local/share/herdr` is a PROPOSAL, not a ruling.
+12. Invoking the script through a symlink resolves the symlink's directory, not
+    the repo (NIT, unfixed by choice).
+Convergence is NOT authorization to spend or ship; owner decisions (items 1-3
+of the order) stay in their own queue.
 
 ## 5. Decisions log / open questions
 
