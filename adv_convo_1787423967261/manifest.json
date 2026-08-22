@@ -6,8 +6,8 @@
   "name": "adv_1787423967261",
   "kind": "claude"
  },
- "status": "open",
- "round": 2,
+ "status": "converged",
+ "round": 4,
  "cap": 12,
  "resumable": true,
  "authorities": {
