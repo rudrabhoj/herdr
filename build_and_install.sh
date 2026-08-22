@@ -96,20 +96,17 @@ case ":$PATH:" in
 esac
 
 # $SHELL is the passwd login shell, which often stays zsh/bash while the user
-# actually runs fish; a fish config dir is the better signal.
+# actually runs fish - and a ~/.config/fish dir survives a single `fish` run -
+# so add to fish when its config exists AND still edit the $SHELL rc. Over-adding
+# is cheap; a missing entry is the failure.
 if [ -d "$HOME/.config/fish" ] && command -v fish >/dev/null 2>&1; then
-    shell=fish
-else
-    shell="$(basename "${SHELL:-}")"
+    # fish_add_path exits 1 when nothing was added, so guard for reruns.
+    fish -c "contains -- '$INSTALL_DIR' \$fish_user_paths; or fish_add_path -U '$INSTALL_DIR'"
+    echo "$INSTALL_DIR is in fish_user_paths"
 fi
 line='export PATH="$HOME/.local/bin:$PATH"'
-case "$shell" in
-    fish)
-        # fish_add_path exits 1 when nothing was added, so guard for reruns.
-        fish -c "contains -- '$INSTALL_DIR' \$fish_user_paths; or fish_add_path -U '$INSTALL_DIR'"
-        echo "$INSTALL_DIR is in fish_user_paths"
-        exit 0
-        ;;
+case "$(basename "${SHELL:-}")" in
+    fish) exit 0 ;;
     zsh) rc="$HOME/.zshrc" ;;
     bash)
         rc="$HOME/.bashrc"

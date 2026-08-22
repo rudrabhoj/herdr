@@ -802,15 +802,23 @@ CLT 26.5 SDK, Docker Desktop 2 GB/2 CPU; re-verified by the round-1 adversary)**
 - Linux: the official tarball is fine (`zig-<arch>-linux-0.15.2.tar.xz`, 200 for
   both arches; the pre-0.14 spelling 404s); the build additionally needs a C
   compiler/linker for the Rust crates (`linker cc not found` otherwise) and
-  `xz` for the tarball. `need cc` runs on both platforms (macOS CLT can be
-  absent or its SDK broken, as `xcrun --show-sdk-version` is on this host today).
+  `xz` for the tarball. `need cc` runs on both platforms but only means
+  something on Linux: macOS ships `/usr/bin/cc` as an xcode-select shim that
+  exists before any developer tools are installed, so macOS CLT coverage rides
+  on `need brew` (Homebrew's installer requires the CLT). A broken SDK state (as
+  `xcrun --show-sdk-version` is on this host today) surfaces as a zig error
+  mid-build; accepted.
 - `install(1)` replaces atomically on macOS but GNU `install` unlinks first, so
   the script installs to `.herdr.new` and `mv`s; macOS and Linux both leave a
   running herdr process undisturbed (inode changes, confirmed both sides).
 - `$SHELL` is the passwd login shell, not the interactive one: on this host it
   is `/bin/zsh` while the owner runs fish with a populated `fish_user_paths`
-  and no `~/.zshrc`. A `~/.config/fish` dir plus `fish` on PATH is the better
-  signal and is checked first. bash login shells read only the first of
+  and no `~/.zshrc`. But a `~/.config/fish` dir is created by a single `fish -c`
+  and proves only that fish was ever run. So the script does not choose: when a
+  fish config exists it adds to `fish_user_paths`, AND it still edits the
+  `$SHELL` rc (unless `$SHELL` is fish). Over-adding is cheap (a duplicate PATH
+  entry, a `~/.zshrc` the owner never opens - the known cosmetic cost on the
+  owner's own Mac); a missing entry is the failure. bash login shells read only the first of
   `.bash_profile`/`.bash_login`/`.profile`, so on macOS an existing `.profile`
   is appended to rather than shadowed by a new `.bash_profile`.
 - `fish_add_path -U` exits 1 when nothing was added (fish 4.8.1); rustup's own
@@ -828,8 +836,10 @@ CLT 26.5 SDK, Docker Desktop 2 GB/2 CPU; re-verified by the round-1 adversary)**
    `.tmp`, then `mv`) + wrapper; Linux: official tarball extracted into a
    `mktemp` dir with an EXIT trap, then `mv`; `cargo build --release --locked`;
    smoke-test `target/release/herdr --version` BEFORE touching the install;
-   install to `.herdr.new` and `mv`; PATH by detected shell (fish config dir
-   first, else `$SHELL`): fish universal var, zsh `~/.zshrc`, bash
+   install to `.herdr.new` and `mv` (an interrupt between the two leaves a
+   dotfile `.herdr.new` that cannot shadow `herdr` and is overwritten next run);
+   PATH: fish universal var whenever a fish config exists, AND the `$SHELL` rc -
+   zsh `~/.zshrc`, bash
    `~/.bash_profile`-or-existing-`~/.profile` on macOS / `~/.bashrc` on Linux,
    otherwise print the export line; exact-line duplicate guard; skipped when
    already on PATH.
@@ -862,9 +872,11 @@ CLT 26.5 SDK, Docker Desktop 2 GB/2 CPU; re-verified by the round-1 adversary)**
       `.herdr.new` remains.
 - [x] Zig section: a pre-existing `zig-lib-*-patched.tmp` (interrupted copy)
       no longer traps the rerun; the patched header is present; rerun no-op.
-- [x] PATH section: detection - `$SHELL=/bin/zsh` with a `~/.config/fish` dir
-      takes the fish branch and writes `fish_user_paths`, no `.zshrc` created;
-      zsh appends once (exact-line guard: a pre-existing
+- [x] PATH section, both directions: a `$SHELL=/bin/zsh` user with a
+      `~/.config/fish` dir gets BOTH `fish_user_paths` and a `~/.zshrc` line
+      (rerun: still one of each); a `$SHELL=fish` user gets `fish_user_paths`
+      only and no `.zshrc`/`.bash_profile`; a zsh user with no fish dir gets
+      `.zshrc` only. zsh appends once (exact-line guard: a pre-existing
       `.local/bin/other` line no longer suppresses it); bash on macOS appends
       to an existing `~/.profile` and creates `~/.bash_profile` only when
       neither exists; unknown shell prints the hint; reruns no-op.
@@ -874,6 +886,9 @@ CLT 26.5 SDK, Docker Desktop 2 GB/2 CPU; re-verified by the round-1 adversary)**
       checks `$ZIG`, emits a fake artifact): full script path twice - real zig
       fetch, EXIT-trap leaves no `.zig-*` dir, install + atomic replace,
       `~/.bashrc` gains exactly one line, second run is a no-op, exit 0 both.
+      Same harness on `fedora:latest` as a `$SHELL=/usr/bin/zsh` user who had
+      run `fish -c true` once: `~/.zshrc` one line AND `fish_user_paths` set
+      (both directions of the M5 case), no `.zig-*` leftovers, exit 0 twice.
 - [ ] Linux end-to-end compile (debian + fedora) once Docker Desktop memory is
       raised to >= 4 GB (user setting); everything up to the final rustc is
       already green on both. Alpine/musl is a NON-GOAL per the intent record
@@ -920,8 +935,11 @@ CLT 26.5 SDK, Docker Desktop 2 GB/2 CPU; re-verified by the round-1 adversary)**
   (tarball cannot link on Xcode 26.4+ SDKs; brew backports the fix; dated
   deprecate/disable 2027/2028). `~/.local/share/herdr` as the toolchain home
   (zig tarball, patched lib copy, wrapper) - proceeding under PROPOSAL, owner
-  may override (intent record, open item). Shell detection: `~/.config/fish`
-  dir first, then `$SHELL` (the passwd shell misdetects the owner's own Mac).
+  may override (intent record, open item). PATH edits do not pick a shell:
+  fish gets `fish_user_paths` whenever its config dir exists AND the `$SHELL`
+  rc is edited too (the passwd `$SHELL` misdetects the owner's own Mac; a fish
+  config dir survives one `fish -c`) - over-adding is cheap, a missing entry is
+  the failure.
   Smoke-test before install, atomic replace - the "never break my installed
   herdr" ruling. The zig tarball is fetched WITHOUT a checksum (TLS plus
   xz/tar integrity; the official installer does verify its binary) - a decision,

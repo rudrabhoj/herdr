@@ -7,7 +7,7 @@
   "kind": "claude"
  },
  "status": "open",
- "round": 0,
+ "round": 1,
  "cap": 12,
  "resumable": true,
  "authorities": {
