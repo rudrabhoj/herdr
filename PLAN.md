@@ -1277,71 +1277,115 @@ integrations are NOT installed (`herdr integration status`: `codex: not
 installed`, `pi: not installed`), so herdr has no session id for them: the live
 codex pane `wS:pW` (`codex -m gpt-6-astra -c model_reasoning_effort=high
 --search --dangerously-bypass-approvals-and-sandbox`, cwd
-`~/Work/Keemakr 2.0/covalent`) would come back from any restart as a bare shell,
-conversation and flags lost. Also several Claude angles were never exercised.
+`~/Work/Keemakr 2.0/covalent`) would come back from any restart as a bare shell.
+Several Claude angles were never exercised either.
 
 **Facts (verified 2026-10-07)**
-- codex-cli 0.159.2. `codex resume [OPTIONS] [SESSION_ID]` itself accepts
-  `-m`, `-c`, `--search`, `--dangerously-bypass-approvals-and-sandbox`, `-s`,
-  `-a`, `-p`; the same flags placed before `resume` also parse
-  (`codex <flag> resume --help` prints resume help). Whether flags before the
-  subcommand APPLY to the resumed session is unverified.
-- A running codex holds its rollout file open:
-  `/proc/<pid>/fd` -> `~/.codex/sessions/YYYY/MM/DD/rollout-<ts>-<uuid>.jsonl`;
-  the uuid is the session id `codex resume` takes.
-- The live codex is a node wrapper (`node .../bin/codex ...`) whose child is the
-  native `codex` binary with the same args; herdr detects the pane as `codex`.
-- pi 0.84.3: `pi --session <path|id>`, `--model <pattern>`, `--thinking <level>`,
-  `--provider <name>`; `~/.pi/agent/extensions/` holds 15+ owner extensions.
-- Phase 10 `launch_profile` inserts kept args right after argv[0]:
-  `codex <kept> resume <id>`, `pi <kept> --session <path>`.
+- codex-cli 0.159.2. `codex resume [OPTIONS] [SESSION_ID]` accepts `-m`, `-c`,
+  `--search`, `--dangerously-bypass-approvals-and-sandbox`, `-s`, `-a`, `-p`
+  as its own options. `~/.codex/config.toml` already pins `model`,
+  `model_reasoning_effort = "high"`, `approval_policy = "never"`,
+  `sandbox_mode = "danger-full-access"`.
+- A running codex is a node wrapper (pgid leader, full argv) plus the native
+  `codex` (comm `codex`) holding exactly one rollout fd
+  `~/.codex/sessions/YYYY/MM/DD/rollout-<ts>-<uuid>.jsonl` and one
+  `thread-writer-locks/<uuid>.lock`; the uuid is the session `codex resume` takes.
+- codex 0.159 runs newly installed or changed hooks only after the owner trusts
+  them (modal "Hooks need review": "Trust all and continue" / "Continue without
+  trusting"); trust persists as `hooks.state.<...>.trusted_hash` in config.toml.
+  `herdr integration install codex` writes `hooks.json` + script and appends
+  `[features] hooks = true`; it has no trust handling.
+- pi 0.84.3 runs via `~/.local/bin/pi` (fish: `exec node .../pi-080/.../cli.js`),
+  and `cli.js:11` sets `process.title`, which wipes `/proc/<pid>/cmdline` to
+  `pi` (probed): herdr cannot read pi's launch flags from /proc. `~/.pi/agent`
+  is a git repo with 15+ owner extensions; some extensions read the live
+  `auth.json` and write live files regardless of `PI_CODING_AGENT_DIR`.
+- codex `auth.json` refresh tokens are single use: a copied CODEX_HOME that
+  refreshes logs the owner's real codex out.
 
-**Implement**
-1. Phase 10 code: insert kept args after a leading subcommand word (argv[1]
-   not starting with `-`), so codex gets `codex resume <kept> <id>` (resume's
-   own options, certain to apply); claude/pi unchanged. Unit test per agent.
-2. Phase 10 code: a resume derived from launch resolution dedupes on the
-   session (`agent_resume::dedupe_key(source, agent, ref)`), not on argv, so
-   one session open in two panes under two variants restores once.
-3. Config: `resume_keep_args.codex = ["--dangerously-bypass-approvals-and-sandbox",
-   "--search", "-m=", "--model=", "-c=", "--config=", "-s=", "--sandbox=",
-   "-a=", "--ask-for-approval=", "-p=", "--profile="]`,
-   `resume_keep_args.pi = ["--model=", "--thinking=", "--provider="]`.
-4. Install herdr's codex and pi integrations with the NEW binary after the
-   Phase 11 deploy (`herdr integration install codex`, `... pi`), backing up
-   `~/.codex/config.toml` and `~/.pi/agent/extensions/` first; check that pi
-   starts with all owner extensions loaded and codex starts, both offline/
-   no prompt sent.
-5. Migration (Phase 11 capture/apply) extended to codex: capture each live
-   codex pane's session id from its open rollout fd and its kept args from
-   argv; apply ADDS `agent_session {source herdr:codex, agent codex, kind id}`
-   and `agent_resume` to that pane in the final snapshot. pi panes: none live
-   today; capture reports any it finds as unresumable.
-6. Claude angles never exercised, each a cheap isolated e2e step with no model
-   call: in-session `/clear` and `/resume <other id>` move the recorded resume
-   to the new session id; `herdr server reload-config` applies edited
-   `agent_variants`/`resume_keep_args`; the interactive `/resume` picker in
-   `claude-me` lists a session created by `claude-kee`.
+**Decisions**
+- D1 never start a real codex or pi against copied credentials; every rehearsal
+  uses stubs (G12.2). Live checks after install are file-level.
+- D2 codex hook trust is given once by the owner, interactively, on the first
+  codex start after install. `--dangerously-bypass-hook-trust` is NOT used
+  (a new dangerous flag needs an owner ruling).
+- D3 pi's flags are known only inside pi: the fork's pi integration asset
+  reports `resume_argv` itself, built from `process.argv` with its own
+  allowlist (`--model`, `--thinking`, `--provider`, `--approve`/`-a`) plus
+  `--session <path>`; herdr config has no `resume_keep_args.pi` (the server
+  resolver then stays out of pi's way: no keep list, no variant).
+- D4 `-c`/`--config` values are not kept (they would land in the 664
+  `session.json` and may carry secrets); codex overrides belong in
+  config.toml or a `-p` profile. `--worktree` and `--remote` are never kept.
+- D5 `server reload-config` changes resume resolution from each pane's NEXT
+  session report or detection onward; existing panes keep their recorded
+  command until then (documented).
+
+**Implement, in this order**
+1. Code: (a) kept args go after a leading subcommand word (codex:
+   `codex resume <kept> <id>`; claude/pi unchanged); (b) a launch-resolved
+   resume dedupes on the session, not argv; (c) resolution also runs when a
+   state report (`pane.report_agent`) first establishes a session (A8);
+   (d) the fork's pi asset sends `resume_argv` per D3. Unit tests per change.
+2. Build and stage `herdr-<newsha>`; re-run the Phase 10 e2e, the migration
+   rehearsal and Phase 11 G3 against it; Phase 11 deploys `<newsha>` instead
+   of `e897ed0e` (Phase 11 binary references updated).
+3. Config template: `resume_keep_args.codex = ["--dangerously-bypass-approvals-and-sandbox",
+   "--search", "--no-alt-screen", "-m=", "--model=", "-s=", "--sandbox=", "-a=",
+   "--ask-for-approval=", "-p=", "--profile=", "--add-dir=", "-C=", "--cd=",
+   "--enable=", "--disable="]`; rendered before the Phase 11 capture.
+4. Migration (Phase 11 steps 5/7/10, rollback) extended to codex: the expected
+   codex set comes from the live server, read-only (`herdr pane list`,
+   `agent == "codex"`), and capture refuses unless every expected pane yields
+   exactly one rollout + one writer-lock fd with matching uuids (taken from
+   the lock name); codex capture runs last; apply ADDS `agent_session {source
+   herdr:codex, agent codex, kind id}` + `agent_resume` to that pane; the
+   report and rollback print `codex resume <kept> <id>` with cwd for every
+   codex pane. Step 10 also checks the old codex pids are gone and records
+   `codex --version`.
+5. Integrations, inside the Phase 11 deploy after apply and before the new
+   server starts: back up `~/.codex/config.toml`, `~/.codex/hooks.json` (absent
+   today) and `~/.pi/agent/extensions/`; `herdr integration install codex` and
+   `... pi` with the new binary. The restored `wS:pW` therefore opens on the
+   hook-trust modal: the DONE banner tells the owner to choose "Trust all and
+   continue". `herdr-agent-state.ts` is an untracked file in the `~/.pi/agent`
+   git repo; committing it is the owner's call.
+6. Claude angles, isolated, no model call, nothing touching live
+   conversations: in-session `/clear` and `/resume <id>` move the recorded
+   resume to the new id; `claude-me`'s `/resume` picker lists a session made by
+   `claude-kee`. Every session used is a throwaway created under a
+   `/tmp/claude-1000/a...` cwd, asserted absent from the live snapshot's
+   `agent_session` set, and deleted with its project dir afterwards (A6).
 
 **Verify (gates)**
-- [ ] G12.1 unit: kept-arg insertion per agent (claude, codex, pi), dedupe on
-      session for two variants.
-- [ ] G12.2 isolated e2e, no model calls: codex started with the live flag set
-      in an isolated herdr after its integration is installed there (isolated
-      `CODEX_HOME` copy), session reported, saved resume =
-      `codex resume <kept> <id>`, restart restores a codex process with those
-      argv; same for pi with an isolated agent dir copy.
-- [ ] G12.3 migration rehearsal including the live codex pane (fake ids),
-      asserting the codex pane gets `agent_session` + `agent_resume`.
+- [ ] G12.1 unit: kept-arg placement for claude, codex, pi; session dedupe for
+      two variants; resolution on a first state-report session.
+- [ ] G12.2 isolated e2e with stubs (D1): stub `codex` and `pi` first on the
+      isolated server's PATH. The codex stub records argv and holds an open
+      fake rollout + writer lock; the real installed codex hook script, fed a
+      synthetic SessionStart, reports it. The pi stub sets `process.title="pi"`
+      (reproducing the /proc wipe) and loads the fork's pi extension with a
+      fake ctx. Asserts: saved resume `codex resume <kept> <id>` and
+      `pi <kept> --session <path>`; after restart the stubs record exactly those
+      argv.
+- [ ] G12.3 migration rehearsal including the live codex pane (fake ids):
+      codex pane gets `agent_session` + `agent_resume`; a capture with the codex
+      pane hidden refuses.
 - [ ] G12.4 Claude angles of step 6.
-- [ ] G12.5 live, after deploy: codex and pi integrations installed, owner
-      extensions intact, `wS:pW` resumed with its flags.
+- [ ] G12.5 live, after deploy: integration files present, owner pi extensions
+      byte-identical to the backup, `~/.codex/hooks.json` valid, after the
+      owner's trust `hooks.state` holds the herdr hook, `wS:pW` resumed with
+      its flags and conversation.
 
-**Untested, accepted as residual unless the review objects**
-- macOS (`process_environ` via KERN_PROCARGS2; account symlinks not set up on
-  the Mac); `herdr --remote`; concurrent use of one session in two accounts;
-  a Claude update adding a new per-session store dir that is not shared;
-  a variant-less custom `CLAUDE_CONFIG_DIR` restoring in the default account.
+**Residual (accepted)**
+- macOS; `herdr --remote`; concurrent use of one session in two accounts; a
+  Claude update adding an unshared per-session dir; a variant-less custom
+  `CLAUDE_CONFIG_DIR` restoring in the default account.
+- If the owner picks "Continue without trusting", codex panes keep the
+  migration's recorded session until trust is given; in-codex `/new` or
+  `/resume` stays invisible to herdr until then.
+- An npm `codex` update between rehearsal and deploy can change hook or resume
+  behavior; the report records `codex --version`.
 
 ## 5. Decisions log / open questions
 

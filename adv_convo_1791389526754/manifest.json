@@ -12,7 +12,8 @@
   "name": "adv_1791389526754",
   "kind": "claude",
   "model": "claude-opus-5-5",
-  "effort": "high"
+  "effort": "high",
+  "pane": "wY:p4"
  },
  "judge": {
   "kind": "claude",
@@ -33,5 +34,8 @@
   "intent": "/home/rudrabhoj/Dev/herdr_and_claude/herdr/research/intent.md",
   "reference": "/home/rudrabhoj/.claude-keemakr/skills/long-yolo-harden-plan/references/reference-plan.md",
   "reference_index": "/home/rudrabhoj/.claude-keemakr/skills/long-yolo-harden-plan/references/reference-plan-index.md"
+ },
+ "target_sha_at_round": {
+  "0": "14a57052dd83ccefeb6d85dd5aa17430059aae1e4097a5250a3d8dfeee8ef92a"
  }
 }
