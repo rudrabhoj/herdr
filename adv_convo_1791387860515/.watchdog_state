@@ -1,0 +1,23 @@
+imp_pane=wY:p1
+adv_pane=wY:p3
+implementer_pane_arg=wY:p1
+adversary_pane_arg=wY:p3
+pid_implementer=9008
+pid_adversary=8590
+last_implementer=wY:p1 (implementer) working (round 1, turn=implementer)
+last_adversary=wY:p3 (adversary) working (round 1, turn=implementer)
+unread_manifest=0
+files_seen=1
+tsha_seen=f3b9d522bed72cd5c117de0fbe7aeaa8146a2096a43cc33d88167e0709fc4b46
+unread_implementer=0
+scr_implementer=469626191
+rev_implementer=1145
+samehash_implementer=0
+progress_at_implementer=1791388487
+unknown_implementer=0
+unread_adversary=0
+scr_adversary=3479155955
+rev_adversary=605
+samehash_adversary=0
+progress_at_adversary=1791388487
+unknown_adversary=0

@@ -1,0 +1,7 @@
+15:47:15Z own pane: none given (--own-pane) - no pane will be closed on exit
+15:47:15Z watchdog up: conv=/home/rudrabhoj/Dev/herdr_and_claude/herdr/adv_convo_1791387860515 imp=wY:p1 adv=wY:p3 interval=90s nudge_every=10 unknown_limit=3 resurrect=900s wedge=2700s pid=31621
+15:47:15Z wY:p1 (implementer) working (round 0, turn=adversary)
+15:47:15Z wY:p3 (adversary) working (round 0, turn=adversary)
+15:48:46Z wY:p1 (implementer) idle (turn=adversary, no action)
+15:53:17Z wY:p1 (implementer) working (round 1, turn=implementer)
+15:53:17Z wY:p3 (adversary) working (round 1, turn=implementer)
