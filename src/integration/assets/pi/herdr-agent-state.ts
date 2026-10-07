@@ -92,13 +92,102 @@ function updateSessionRef(ctx: any): void {
 }
 
 function withSessionRef(params: Record<string, unknown>): Record<string, unknown> {
+  const resume = resumeArgv();
+  const withResume = resume ? { ...params, resume_argv: resume } : params;
   if (currentAgentSessionPath) {
-    return { ...params, agent_session_path: currentAgentSessionPath };
+    return { ...withResume, agent_session_path: currentAgentSessionPath };
   }
   if (currentAgentSessionId) {
-    return { ...params, agent_session_id: currentAgentSessionId };
+    return { ...withResume, agent_session_id: currentAgentSessionId };
   }
   return params;
+}
+
+// pi sets process.title, which wipes /proc/<pid>/cmdline, so herdr cannot read
+// pi's launch flags; pi reports the restore command itself. Only flags that
+// describe how to continue the same work are kept.
+const RESUME_VALUE_FLAGS = new Set(["--model", "--thinking", "--provider"]);
+const RESUME_SWITCHES = new Set(["--approve", "-a", "--no-approve", "-na"]);
+
+function keptLaunchArgs(): string[] {
+  const argv = process.argv.slice(2);
+  const kept: string[] = [];
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i];
+    const eq = arg.indexOf("=");
+    const name = eq > 0 ? arg.slice(0, eq) : arg;
+    if (RESUME_VALUE_FLAGS.has(name)) {
+      if (eq > 0) {
+        kept.push(arg);
+      } else if (i + 1 < argv.length && !argv[i + 1].startsWith("-")) {
+        kept.push(arg, argv[i + 1]);
+        i++;
+      }
+    } else if (RESUME_SWITCHES.has(arg)) {
+      kept.push(arg);
+    }
+  }
+  return kept;
+}
+
+function resumeArgv(): string[] | undefined {
+  const session = currentAgentSessionPath ?? currentAgentSessionId;
+  if (!session) {
+    return undefined;
+  }
+  const argv = ["pi", ...keptLaunchArgs(), "--session", session];
+  // herdr types the command into a shell and refuses these characters.
+  return argv.some((arg) => arg.includes("'") || /[\u0000-\u001f]/.test(arg))
+    ? undefined
+    : argv;
+}
+
+// The account this pi talks to right now. Read through pi's own credential
+// resolution, so extensions that switch accounts at runtime are honored.
+function emailFromToken(token: unknown): string | undefined {
+  if (typeof token !== "string" || token.split(".").length !== 3) {
+    return undefined;
+  }
+  try {
+    const claims = JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString());
+    const email = claims?.["https://api.openai.com/profile"]?.email ?? claims?.email;
+    return typeof email === "string" && email.length > 0 ? email : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+async function accountLabel(ctx: any): Promise<string | undefined> {
+  const provider = ctx?.model?.provider;
+  if (typeof provider !== "string" || provider.length === 0) {
+    return undefined;
+  }
+  let email: string | undefined;
+  try {
+    const key = await Promise.race([
+      ctx?.modelRegistry?.getApiKeyForProvider?.(provider),
+      new Promise((resolve) => setTimeout(resolve, 1500).unref?.()),
+    ]);
+    email = emailFromToken(key);
+  } catch {
+    email = undefined;
+  }
+  return `pi · ${email ?? provider}`;
+}
+
+let lastAccountLabel: string | undefined;
+
+async function reportAccount(ctx: any): Promise<void> {
+  const label = await accountLabel(ctx);
+  if (!label || label === lastAccountLabel) {
+    return;
+  }
+  lastAccountLabel = label;
+  await sendRequest({
+    id: `${source}:metadata:${Date.now()}:${Math.random().toString(36).slice(2)}`,
+    method: "pane.report_metadata",
+    params: { pane_id: paneId, source, agent: "pi", display_agent: label },
+  });
 }
 
 function currentSessionRef(): Record<string, unknown> | undefined {
@@ -127,6 +216,7 @@ function reportSession(sessionStartSource?: string): Promise<void> {
       seq: nextReportSeq(),
       session_start_source: sessionStartSource,
       ...sessionRef,
+      ...(resumeArgv() ? { resume_argv: resumeArgv() } : {}),
     },
   });
 }
@@ -238,6 +328,14 @@ export default function (pi) {
     // A reload can replace this extension mid-run without emitting another agent_start.
     agentActive = ctx?.isIdle?.() === false;
     publishState(true);
+    void reportAccount(ctx);
+  });
+
+  pi.on("model_select", (_event, ctx) => {
+    if (!rootSession) {
+      return;
+    }
+    void reportAccount(ctx);
   });
 
   pi.on("agent_start", (_event, ctx) => {
@@ -248,6 +346,7 @@ export default function (pi) {
     void reportSession();
     agentActive = true;
     publishState();
+    void reportAccount(ctx);
   });
 
   pi.on("agent_settled", (_event, ctx) => {

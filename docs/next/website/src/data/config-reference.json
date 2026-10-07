@@ -1133,6 +1133,12 @@
           "description": "Show agent labels in split pane borders when no manual pane label is set."
         },
         {
+          "key": "ui.show_agent_account",
+          "type": "boolean",
+          "default": "false",
+          "description": "Add the logged-in account to Claude and codex agent labels, e.g. \"claude-kee · me@example.com\", following login changes. pi reports its own account through its herdr extension."
+        },
+        {
           "key": "ui.hide_tab_bar_when_single_tab",
           "type": "boolean",
           "default": "false",

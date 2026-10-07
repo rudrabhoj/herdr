@@ -558,7 +558,7 @@ startup_per_agent_delay_ms = 100
 
 只有通过官方集成获得有效原生会话引用的窗格才能恢复；其他窗格会作为普通 shell 恢复。有关受支持的智能体和持久化行为，请参阅[会话状态与恢复](/docs/session-state/)。
 
-仅通过环境变量区分的启动包装（例如使用独立 `CLAUDE_CONFIG_DIR` 的第二个 Claude Code 账号）可以声明为变体。会话上报时，Herdr 读取正在运行的智能体的环境变量；第一个 `env` 全部匹配的 `[[session.agent_variants]]` 条目的 `name` 会显示在侧边栏，并作为恢复命令（`claude-kee` 这样的 shell 函数或别名也可以）。开头的 `~/` 会展开为主目录，空值匹配未设置的变量。`resume_keep_args` 按智能体列出启动参数：若智能体启动时带有这些参数，恢复命令会保留它们；以 `=` 结尾的条目表示带值的标志。支持 Linux 和 macOS。
+仅通过环境变量区分的启动包装（例如使用独立 `CLAUDE_CONFIG_DIR` 的第二个 Claude Code 账号）可以声明为变体。会话上报时，Herdr 读取正在运行的智能体的环境变量；第一个 `env` 全部匹配的 `[[session.agent_variants]]` 条目的 `name` 会显示在侧边栏，并作为恢复命令（`claude-kee` 这样的 shell 函数或别名也可以）。开头的 `~/` 会展开为主目录，空值匹配未设置的变量。`resume_keep_args` 按智能体列出启动参数：若智能体启动时带有这些参数，恢复命令会保留它们；以 `=` 结尾的条目表示带值的标志。对于带子命令的命令（如 `codex resume <id>`），保留的参数位于子命令之后。pi 会对其他进程隐藏自身参数，因此由 pi 的 herdr 扩展自行上报恢复命令。在 `[ui]` 中设置 `show_agent_account = true` 可在标签中加入当前登录的账号，例如 `claude-kee · me@example.com`；Herdr 从智能体自己的配置目录读取 Claude 的 `.claude.json` 和 codex 的 `auth.json`，并跟随登录变化，pi 则通过其扩展上报当前账号。支持 Linux 和 macOS。
 
 ```toml
 [session]

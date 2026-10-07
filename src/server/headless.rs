@@ -3299,6 +3299,14 @@ impl HeadlessServer {
             changed = true;
         }
 
+        if self
+            .app
+            .agent_account_deadline
+            .is_some_and(|deadline| now >= deadline)
+        {
+            changed |= self.app.refresh_agent_accounts(now);
+        }
+
         changed |= self.app.handle_tab_bar_status_tasks(now);
 
         if geometry_dirty {

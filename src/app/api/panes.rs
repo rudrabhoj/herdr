@@ -1574,6 +1574,12 @@ impl App {
             params.agent_session_id,
             params.agent_session_path,
         );
+        let known_session = self.pane_terminal(ws_idx, pane_id).and_then(|terminal| {
+            terminal
+                .persisted_agent_session
+                .as_ref()
+                .map(|session| session.session_ref.clone())
+        });
         self.handle_internal_event(crate::events::AppEvent::HookStateReported {
             pane_id,
             session_ref: session_ref.clone(),
@@ -1585,6 +1591,13 @@ impl App {
         });
         let applied =
             report_is_newer && self.session_report_applied(ws_idx, pane_id, session_ref.as_ref());
+        // State reports arrive every turn; resolve only when one first
+        // establishes a session (agents whose session start never reported).
+        if let Some(session_ref) = session_ref.filter(|session_ref| {
+            applied && params.resume_argv.is_none() && known_session.as_ref() != Some(session_ref)
+        }) {
+            self.resolve_agent_launch(ws_idx, pane_id, &params.source, &agent_label, session_ref);
+        }
         self.report_agent_resume(
             id,
             ws_idx,
@@ -1645,10 +1658,10 @@ impl App {
         )
     }
 
-    /// Applies the configured agent variants and kept launch arguments to a
-    /// freshly reported session: the pane shows the variant's name and restores
-    /// through it. Reads the agent process once per session report, never on a
-    /// render path.
+    /// Applies the configured agent variants, kept launch arguments, and the
+    /// account label to a freshly reported session: the pane shows the variant
+    /// (and account) and restores through the variant. Reads the agent process
+    /// once per session report, never on a render path.
     fn resolve_agent_launch(
         &mut self,
         ws_idx: usize,
@@ -1660,14 +1673,17 @@ impl App {
         let keep_args = self
             .resume_keep_args
             .get(agent_label)
-            .map(Vec::as_slice)
+            .cloned()
             .unwrap_or_default();
-        if keep_args.is_empty()
-            && !self
+        let wants_resume = !keep_args.is_empty()
+            || self
                 .agent_variants
                 .iter()
-                .any(|variant| variant.agent == agent_label)
-        {
+                .any(|variant| variant.agent == agent_label);
+        let home = crate::integration::home_dir().ok();
+        let wants_account = self.show_agent_account
+            && crate::agent_account::account_source(agent_label, b"", home.as_deref()).is_some();
+        if !wants_resume && !wants_account {
             return;
         }
         let session = crate::agent_resume::PersistedAgentSession {
@@ -1675,42 +1691,162 @@ impl App {
             agent: agent_label.to_string(),
             session_ref,
         };
-        let profile = self
-            .agent_launch(ws_idx, pane_id, agent_label)
+        let launch = self.agent_launch(ws_idx, pane_id, agent_label);
+        let profile = launch
+            .as_ref()
             .map(|(environ, argv)| {
                 crate::agent_resume::launch_profile(
                     &session,
-                    &environ,
-                    &argv,
+                    environ,
+                    argv,
                     &self.agent_variants,
-                    keep_args,
-                    crate::integration::home_dir().ok().as_deref(),
+                    &keep_args,
+                    home.as_deref(),
                 )
             })
             .unwrap_or(crate::agent_resume::AgentLaunchProfile {
                 variant: None,
                 resume_argv: None,
             });
-        self.handle_internal_event(crate::events::AppEvent::AgentLaunchResumeResolved {
+        if wants_resume {
+            self.handle_internal_event(crate::events::AppEvent::AgentLaunchResumeResolved {
+                pane_id,
+                source: source.to_string(),
+                agent_label: agent_label.to_string(),
+                argv: profile.resume_argv,
+            });
+        }
+        let account = wants_account
+            .then(|| {
+                let (environ, _) = launch.as_ref()?;
+                crate::agent_account::account_source(agent_label, environ, home.as_deref())
+            })
+            .flatten();
+        let base = profile
+            .variant
+            .or_else(|| account.is_some().then(|| agent_label.to_string()));
+        self.set_agent_account_label(pane_id, source, agent_label, base, account);
+    }
+
+    /// Shows `base` (plus the account read from `account`) as the pane's agent
+    /// label and keeps watching the account file so a login change shows up.
+    /// `None` clears a label this resolver set before; a label reported by the
+    /// agent itself (pi) is never touched.
+    fn set_agent_account_label(
+        &mut self,
+        pane_id: crate::layout::PaneId,
+        source: &str,
+        agent_label: &str,
+        base: Option<String>,
+        account: Option<crate::agent_account::AccountSource>,
+    ) {
+        let Some(base) = base else {
+            if self.agent_account_watches.remove(&pane_id).is_some() {
+                self.report_agent_label(pane_id, source, agent_label, None);
+            }
+            self.sync_agent_account_deadline();
+            return;
+        };
+        let modified = account
+            .as_ref()
+            .and_then(|account| file_modified(account.path()));
+        let email = account
+            .as_ref()
+            .and_then(crate::agent_account::read_account);
+        let label = crate::agent_account::account_label(&base, email.as_deref());
+        self.report_agent_label(pane_id, source, agent_label, Some(label.clone()));
+        self.agent_account_watches.insert(
             pane_id,
-            source: source.to_string(),
-            agent_label: agent_label.to_string(),
-            argv: profile.resume_argv,
-        });
+            AgentAccountWatch {
+                source: source.to_string(),
+                agent: agent_label.to_string(),
+                base,
+                account,
+                modified,
+                label,
+            },
+        );
+        self.sync_agent_account_deadline();
+    }
+
+    fn report_agent_label(
+        &mut self,
+        pane_id: crate::layout::PaneId,
+        source: &str,
+        agent_label: &str,
+        label: Option<String>,
+    ) {
         self.handle_internal_event(crate::events::AppEvent::HookMetadataReported {
             pane_id,
             source: source.to_string(),
             agent_label: Some(agent_label.to_string()),
             applies_to_source: None,
             title: None,
-            clear_display_agent: profile.variant.is_none(),
-            display_agent: profile.variant,
+            clear_display_agent: label.is_none(),
+            display_agent: label,
             state_labels: std::collections::HashMap::new(),
             clear_title: false,
             clear_state_labels: false,
             seq: None,
             ttl: None,
         });
+    }
+
+    fn sync_agent_account_deadline(&mut self) {
+        self.agent_account_deadline = self
+            .agent_account_watches
+            .values()
+            .any(|watch| watch.account.is_some())
+            .then(|| std::time::Instant::now() + AGENT_ACCOUNT_POLL);
+    }
+
+    /// Follows login changes: one `stat` per watched account file per poll, a
+    /// re-read only when the file changed, a label report only when the
+    /// account changed. Watches of panes whose agent is gone are dropped.
+    pub(crate) fn refresh_agent_accounts(&mut self, _now: std::time::Instant) -> bool {
+        let mut changed = false;
+        let mut stale = Vec::new();
+        let mut updates = Vec::new();
+        for (pane_id, watch) in &self.agent_account_watches {
+            let alive = self.find_pane(*pane_id).is_some_and(|(ws_idx, _)| {
+                self.pane_terminal(ws_idx, *pane_id)
+                    .is_some_and(|terminal| {
+                        terminal.effective_agent_label() == Some(watch.agent.as_str())
+                    })
+            });
+            if !alive {
+                stale.push(*pane_id);
+                continue;
+            }
+            let Some(account) = watch.account.as_ref() else {
+                continue;
+            };
+            let modified = file_modified(account.path());
+            if modified == watch.modified {
+                continue;
+            }
+            let email = crate::agent_account::read_account(account);
+            let label = crate::agent_account::account_label(&watch.base, email.as_deref());
+            updates.push((*pane_id, modified, label));
+        }
+        for pane_id in stale {
+            self.agent_account_watches.remove(&pane_id);
+        }
+        for (pane_id, modified, label) in updates {
+            let Some(watch) = self.agent_account_watches.get_mut(&pane_id) else {
+                continue;
+            };
+            watch.modified = modified;
+            if watch.label == label {
+                continue;
+            }
+            watch.label = label.clone();
+            let (source, agent) = (watch.source.clone(), watch.agent.clone());
+            self.report_agent_label(pane_id, &source, &agent, Some(label));
+            changed = true;
+        }
+        self.sync_agent_account_deadline();
+        changed
     }
 
     /// Session reports can arrive before process detection, and agents that
@@ -4804,4 +4940,23 @@ mod tests {
             assert_eq!(metadata_error_code(&response), "invalid_metadata_ttl");
         }
     }
+}
+
+const AGENT_ACCOUNT_POLL: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// The account label the server shows for one pane, and how to refresh it.
+#[derive(Debug)]
+pub(crate) struct AgentAccountWatch {
+    source: String,
+    agent: String,
+    base: String,
+    account: Option<crate::agent_account::AccountSource>,
+    modified: Option<std::time::SystemTime>,
+    label: String,
+}
+
+fn file_modified(path: &std::path::Path) -> Option<std::time::SystemTime> {
+    std::fs::metadata(path)
+        .and_then(|meta| meta.modified())
+        .ok()
 }

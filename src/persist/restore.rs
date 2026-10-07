@@ -824,7 +824,21 @@ fn pane_restore_startup<'a>(
     let restore_plan = if !agent_restore.enabled {
         None
     } else if let Some(resume) = reported_resume {
-        Some(reported_resume_from_snapshot(resume).plan(cwd))
+        let mut plan = reported_resume_from_snapshot(resume).plan(cwd);
+        // One session reopened under two launch variants must still restore
+        // once, so a resume that belongs to a known session dedupes on it.
+        if let Some(session) = session
+            .filter(|session| session.source == resume.source && session.agent == resume.agent)
+        {
+            if let Some(persisted) = persisted_agent_session_from_snapshot(session) {
+                plan.dedupe_key = crate::agent_resume::dedupe_key(
+                    &persisted.source,
+                    &persisted.agent,
+                    &persisted.session_ref,
+                );
+            }
+        }
+        Some(plan)
     } else {
         session.and_then(|session| restore_plan_for_snapshot(session, true))
     };
@@ -1285,6 +1299,44 @@ mod tests {
         assert!(duplicate.restore_plan.is_none());
         assert!(duplicate.initial_history_ansi.is_none());
         assert!(duplicate.duplicate_agent_session);
+    }
+
+    #[test]
+    fn one_session_under_two_launch_variants_restores_once() {
+        let session = super::super::snapshot::PaneAgentSessionSnapshot {
+            source: "herdr:claude".into(),
+            agent: "claude".into(),
+            kind: crate::agent_resume::AgentSessionRefKind::Id,
+            value: "abc-123".into(),
+        };
+        let resume = |variant: &str| super::super::snapshot::PaneAgentResumeSnapshot {
+            source: "herdr:claude".into(),
+            agent: "claude".into(),
+            argv: vec![variant.into(), "--resume".into(), "abc-123".into()],
+        };
+        let mut resumed = HashSet::new();
+        let mut agent_restore = AgentRestoreState {
+            enabled: true,
+            resumed_sessions: &mut resumed,
+        };
+        let cwd = std::path::Path::new("/a");
+        let first = pane_restore_startup(
+            Some(&session),
+            Some(&resume("claude-kee")),
+            cwd,
+            None,
+            &mut agent_restore,
+        );
+        let second = pane_restore_startup(
+            Some(&session),
+            Some(&resume("claude-me")),
+            cwd,
+            None,
+            &mut agent_restore,
+        );
+        assert_eq!(first.restore_plan.unwrap().argv[0], "claude-kee");
+        assert!(second.restore_plan.is_none());
+        assert!(second.duplicate_agent_session);
     }
 
     #[test]

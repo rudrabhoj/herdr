@@ -11,6 +11,7 @@ const NESTED_HERDR_MESSAGES: [&str; 6] = [
     "recursion detected. base case not found. aborting.",
 ];
 
+mod agent_account;
 mod agent_resume;
 mod agent_view_eval;
 mod api;
@@ -340,6 +341,7 @@ const DEFAULT_CONFIG: &str = r##"# herdr configuration
 
 # Show detected/reported agent labels in split pane borders when no manual pane name is set.
 # show_agent_labels_on_pane_borders = false
+# show_agent_account = false   # add the logged-in account to Claude/codex agent labels
 
 # Hide the tab row when a workspace has exactly one tab.
 # New tabs can still be created with the configured keybinding.
@@ -431,7 +433,8 @@ const DEFAULT_CONFIG: &str = r##"# herdr configuration
 # Milliseconds between automatic agent restores; 0 starts them without spacing.
 # startup_per_agent_delay_ms = 100
 # Arguments carried into the restore command when the agent was launched with
-# them; a trailing "=" marks a flag that takes a value.
+# them; a trailing "=" marks a flag that takes a value. Never keep codex -c
+# (values land in session.json), --worktree or --remote.
 # resume_keep_args = { claude = ["--dangerously-skip-permissions"] }
 # Wrappers that differ only by environment (e.g. a second Claude account) are
 # shown and restored under their own name:

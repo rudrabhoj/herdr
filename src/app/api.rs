@@ -6,6 +6,7 @@ mod env;
 mod integrations;
 mod layouts;
 mod panes;
+pub(crate) use panes::AgentAccountWatch;
 pub(crate) mod plugins;
 pub(super) mod responses;
 mod session;

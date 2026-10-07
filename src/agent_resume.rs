@@ -358,7 +358,15 @@ pub(crate) fn launch_profile(
             if let Some(name) = &variant {
                 argv[0] = name.clone();
             }
-            argv.splice(1..1, kept);
+            // Options go after a leading subcommand (`codex resume <kept> <id>`),
+            // where they are the subcommand's own; flag-style plans
+            // (`claude --resume`, `pi --session`) take them right after the command.
+            let at = if argv.get(1).is_some_and(|arg| !arg.starts_with('-')) {
+                2
+            } else {
+                1
+            };
+            argv.splice(at..at, kept);
             argv
         })
         .filter(|argv| validate_resume_argv(argv).is_ok());
@@ -1187,6 +1195,70 @@ mod tests {
                 "--dangerously-skip-permissions",
                 "--resume",
                 "abc-123"
+            ]))
+        );
+    }
+
+    #[test]
+    fn launch_profile_places_kept_args_after_a_subcommand() {
+        let codex = PersistedAgentSession {
+            source: "herdr:codex".into(),
+            agent: "codex".into(),
+            session_ref: AgentSessionRef::id("01a108ae").unwrap(),
+        };
+        // The live codex argv shape: node wrapper, then the native flags.
+        let launched = argv(&[
+            "node",
+            "/home/me/.local/share/nvm/v24/bin/codex",
+            "-m",
+            "gpt-6-astra",
+            "-c",
+            "model_reasoning_effort=high",
+            "--search",
+            "--dangerously-bypass-approvals-and-sandbox",
+        ]);
+        let keep = [
+            "--dangerously-bypass-approvals-and-sandbox",
+            "--search",
+            "-m=",
+            "--model=",
+        ]
+        .map(String::from);
+        let profile = launch_profile(&codex, b"", &launched, &[], &keep, None);
+        assert_eq!(
+            profile.resume_argv,
+            Some(argv(&[
+                "codex",
+                "resume",
+                "-m",
+                "gpt-6-astra",
+                "--search",
+                "--dangerously-bypass-approvals-and-sandbox",
+                "01a108ae"
+            ]))
+        );
+
+        let pi = PersistedAgentSession {
+            source: "herdr:pi".into(),
+            agent: "pi".into(),
+            session_ref: AgentSessionRef::path("/tmp/s.jsonl").unwrap(),
+        };
+        let profile = launch_profile(
+            &pi,
+            b"",
+            &argv(&["pi", "--thinking", "high"]),
+            &[],
+            &["--thinking=".to_string()],
+            None,
+        );
+        assert_eq!(
+            profile.resume_argv,
+            Some(argv(&[
+                "pi",
+                "--thinking",
+                "high",
+                "--session",
+                "/tmp/s.jsonl"
             ]))
         );
     }

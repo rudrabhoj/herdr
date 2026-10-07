@@ -325,6 +325,73 @@ test("Pi reports idle only after the agent settles", async () => {
   expect(requestStates(requests)).toEqual(["idle", "working", "idle"]);
 });
 
+test("Pi reports its own restore command and account, which /proc cannot show", async () => {
+  const requests = await startRecordingServer("pi-resume-account");
+  // node keeps process.argv even after pi's process.title wipes /proc cmdline.
+  process.argv = [
+    "node",
+    "/x/cli.js",
+    "--model",
+    "openai-codex/gpt-6-astra",
+    "--thinking=high",
+    "-a",
+    "--verbose",
+    "fix it",
+  ];
+  const { handlers, pi } = createExtensionHarness();
+  const { default: install } = await importFresh("./pi/herdr-agent-state.ts");
+  install(pi);
+  const claims = Buffer.from(
+    JSON.stringify({ "https://api.openai.com/profile": { email: "me@example.com" } }),
+  ).toString("base64url");
+  let token = `h.${claims}.s`;
+  const context = {
+    ...piContext(() => true),
+    sessionManager: {
+      getSessionFile: () => "/home/me/.pi/agent/sessions/s.jsonl",
+      getSessionId: () => "s",
+    },
+    model: { provider: "openai-codex", id: "gpt-6-astra" },
+    modelRegistry: { getApiKeyForProvider: async () => token },
+  };
+  await handlers.get("session_start")?.({ reason: "startup" }, context);
+  const labels = () =>
+    requests
+      .filter((request) => isRecord(request) && request.method === "pane.report_metadata")
+      .map((request) => (request as any).params.display_agent);
+  await waitFor(() => labels().length === 1);
+  expect(labels()).toEqual(["pi · me@example.com"]);
+
+  const state = requests.find(
+    (request) => isRecord(request) && request.method === "pane.report_agent",
+  ) as any;
+  expect(state.params.resume_argv).toEqual([
+    "pi",
+    "--model",
+    "openai-codex/gpt-6-astra",
+    "--thinking=high",
+    "-a",
+    "--session",
+    "/home/me/.pi/agent/sessions/s.jsonl",
+  ]);
+
+  // An account switch (another login, or an extension swapping accounts) shows
+  // on the next turn; an unchanged account is not re-sent.
+  handlers.get("agent_start")?.({}, context);
+  await Bun.sleep(25);
+  expect(labels()).toEqual(["pi · me@example.com"]);
+  token = `h.${Buffer.from(JSON.stringify({ email: "other@example.com" })).toString("base64url")}.s`;
+  handlers.get("agent_start")?.({}, context);
+  await waitFor(() => labels().length === 2);
+  expect(labels()[1]).toBe("pi · other@example.com");
+
+  // A provider whose token carries no email still names the provider.
+  token = "opaque-anthropic-token";
+  handlers.get("model_select")?.({}, { ...context, model: { provider: "anthropic" } });
+  await waitFor(() => labels().length === 3);
+  expect(labels()[2]).toBe("pi · anthropic");
+});
+
 test("Pi ignores RPC sessions even when UI APIs are available", async () => {
   const requests = await startRecordingServer("pi-rpc");
   const { handlers, pi } = createExtensionHarness();

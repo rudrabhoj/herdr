@@ -92,12 +92,20 @@ hide_tab_bar_when_single_tab = true
 # zellij creates tabs immediately without prompting for a name.
 prompt_new_tab_name = false
 
+# Agents area shows the logged-in account: "claude-kee · me@example.com",
+# "codex · ...", "pi · ..." (pi reports its own), updated on login changes.
+show_agent_account = true
+
 [ui.toast]
 delivery = "system"
 
 [session]
-# Keep the permission bypass (either form) when herdr restores a Claude pane.
-resume_keep_args = { claude = ["--dangerously-skip-permissions", "--permission-mode="] }
+# Launch flags carried into the restore command (trailing "=" takes a value).
+# Claude: the permission bypass in either form. codex: bypass, search, model,
+# sandbox/approval/profile and dirs; never -c (secrets would land in
+# session.json; overrides belong in ~/.codex/config.toml), --worktree or
+# --remote. pi reports its own restore command.
+resume_keep_args = { claude = ["--dangerously-skip-permissions", "--permission-mode="], codex = ["--dangerously-bypass-approvals-and-sandbox", "--search", "--no-alt-screen", "-m=", "--model=", "-s=", "--sandbox=", "-a=", "--ask-for-approval=", "-p=", "--profile=", "--add-dir=", "-C=", "--cd=", "--enable=", "--disable="] }
 
 # Claude accounts (fish functions in conf.d/claude-accounts.fish). herdr reads
 # CLAUDE_CONFIG_DIR from the running claude, shows the matching name, and

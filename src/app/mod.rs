@@ -143,6 +143,10 @@ pub struct App {
     startup_per_agent_delay: Duration,
     agent_variants: Vec<crate::config::AgentVariantConfig>,
     resume_keep_args: std::collections::HashMap<String, Vec<String>>,
+    show_agent_account: bool,
+    pub(crate) agent_account_watches:
+        std::collections::HashMap<crate::layout::PaneId, crate::app::api::AgentAccountWatch>,
+    pub(crate) agent_account_deadline: Option<Instant>,
     next_agent_resume_at: Option<Instant>,
     pub(crate) session_save_deadline: Option<Instant>,
     pub(crate) session_save_thread: Option<std::thread::JoinHandle<()>>,
@@ -658,6 +662,9 @@ impl App {
             ),
             agent_variants: config.session.agent_variants.clone(),
             resume_keep_args: config.session.resume_keep_args.clone(),
+            show_agent_account: config.ui.show_agent_account,
+            agent_account_watches: std::collections::HashMap::new(),
+            agent_account_deadline: None,
             next_agent_resume_at: None,
             session_save_deadline: None,
             session_save_thread: None,
@@ -910,6 +917,7 @@ impl App {
                 self.state.pane_gaps = config.ui.pane_gaps;
                 self.state.show_agent_labels_on_pane_borders =
                     config.ui.show_agent_labels_on_pane_borders;
+                self.show_agent_account = config.ui.show_agent_account;
                 self.configure_tab_bar_status(
                     &config.ui.tab_bar_right,
                     &config.ui.tab_bar_right_separator,
