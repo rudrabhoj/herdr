@@ -1133,7 +1133,11 @@ Every root the script touches is a variable whose default is the live value
 `$BIN_DIR/herdr -> $VW_BASE/current/bin/herdr` atomically (`ln -s` + `mv -T`)
 whatever is there; the lock stub carries the marker line
 `# herdr-deploy-lock`, and the generalized promote replaces a file with that
-marker without archiving it (B1).
+marker without archiving it (B1). Every herdr CLI call and the server start run
+through one wrapper that sets `HERDR_SOCKET_PATH=$HERDR_CFG/herdr.sock` and
+`XDG_CONFIG_HOME=$(dirname $HERDR_CFG)` and unsets `HERDR_PANE_ID`, so the
+socket a call reaches is the one the variables name, never the CLI's default
+(C2).
 Before anything stops:
 1. Stage release `releases/20261007`: `cp -al releases/20260906`, then
    install the staged binary as a new inode at `bin/herdr` (the old release is
@@ -1152,17 +1156,22 @@ Before anything stops:
    `~/.config/herdr/config.toml`.
 4. Lock: replace `~/.local/bin/herdr` with a stub that prints "herdr upgrade
    in progress - wait for DONE in <log>" and exits 1 (A4, C7).
-5. Capture last (A3): `migrate-herdr-resume.py capture` keyed by pane id with
-   the rendered new config; exit non-zero on any per-pane bypass mismatch
-   between `/proc` and the keep list (A1 oracle) -> unlock and abort, nothing
-   stopped.
+5. Capture last (A3): `HERDR_CONFIG_PATH=<rendered config>
+   HERDR_LIVE_SOCKET=$HERDR_CFG/herdr.sock migrate-herdr-resume.py capture
+   <capture.json> $HERDR_CFG/session.json`, keyed by pane id. It exits non-zero
+   unless the captured pane set equals the Claude panes in the server's own
+   snapshot (C1: an empty or short capture cannot pass) and on any per-pane
+   bypass mismatch between `/proc` and the keep list (A1 oracle) -> relink and
+   abort, nothing stopped. Then assert the pid listening on
+   `$HERDR_CFG/herdr.sock` is still the pid saved in step 2 (C2).
 From here on every failure runs `rollback` automatically:
 6. `herdr server stop` (old binary); wait until the old pid is gone and
    `session.json` stopped changing; copy it as `session.final.json`.
 7. `migrate-herdr-resume.py apply` on `~/.config/herdr/session.json`, keyed
    by pane, using the snapshot's final session ids. A Claude pane without a
-   capture entry loses its `agent_session` (no wrong-account restore) and its
-   manual command is printed to the log and the DONE banner.
+   capture entry loses its `agent_session` (no wrong-account restore); the log
+   and DONE banner print its session id and cwd with the variant marked
+   UNKNOWN, never a plain `claude --resume` (C1).
 8. Install the rendered config; promote `current` -> `releases/20261007` (a
    generalized `promote.sh <release>`), which also restores the real
    `~/.local/bin/herdr` symlink (lock off).
@@ -1214,7 +1223,12 @@ the owner restores accounts and bypass by hand; 0.8.0 cannot do it (C2).
       in place - `readlink $BIN_DIR/herdr` is the release symlink and
       `$BIN_DIR/herdr --version` prints 0.8.0; (d) the live
       `readlink ~/.local/bin/herdr`, `readlink current` and live server pid
-      are identical before and after G3.
+      are identical before and after G3, and before G3's step 6 the pid
+      listening on its `$HERDR_CFG/herdr.sock` is asserted not to be the live
+      server's (C2).
+- [x] G5 short-capture refusal (C1): `capture` with the socket left to its
+      default (deploy dir) exits 1 naming every snapshot Claude pane it did
+      not capture; with `HERDR_LIVE_SOCKET` set it captures 16 of 16 and exits 0.
 - [ ] G4 live: step 10's report is clean; this session resumed in `wY:p1`;
       sidebar labels show variants.
 

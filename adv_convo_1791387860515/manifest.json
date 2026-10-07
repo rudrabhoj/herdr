@@ -25,7 +25,7 @@
   "judge": "inherited"
  },
  "status": "open",
- "round": 2,
+ "round": 3,
  "cap": 6,
  "resumable": true,
  "cap_note": "owner: 'make sure we do not waste huge tokens in testing' - cap lowered from 12 to 6",
@@ -38,6 +38,7 @@
  "target_sha_at_round": {
   "0": "f3b9d522bed72cd5c117de0fbe7aeaa8146a2096a43cc33d88167e0709fc4b46",
   "1": "2c6cfc129098960a35918089f7a35ffa83f6aa89bbb77b6aec9d81dd7c721fe9",
-  "2": "b8c16ff8305151069a0e8650d0991320ebae1534f6f2c884be3d9b3dfe257973"
+  "2": "b8c16ff8305151069a0e8650d0991320ebae1534f6f2c884be3d9b3dfe257973",
+  "3": "773d2f3af5258339df4b2ad60b75637ef7009c9895f2ed7e6e7c31ba8b12d89f"
  }
 }
