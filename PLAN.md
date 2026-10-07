@@ -1077,7 +1077,7 @@ No API or wire change; restore already prefers reported resume commands.
       captures variants from the live processes and patches the final
       snapshot so the first restore is already correct.
 
-### Phase 11 - Live deployment and account migration [UNHARDENED]
+### Phase 11 - Live deployment and account migration [HARDENED 2026-10-07, adv_convo_1791387860515]
 
 **Goal**: move the live void-workstation herdr (release `20260906`, herdr
 0.8.0) to the fork build `e897ed0e` (0.9.3, staged at
@@ -1177,14 +1177,17 @@ From here on every failure runs `rollback` automatically:
    `~/.local/bin/herdr` symlink (lock off).
 9. Start the new server detached with the saved environment:
    `setsid -f env -i <saved env> <release>/bin/herdr server`.
-10. Verify against the capture: the server listening is a new pid running
+10. Verify against the capture, polling until every captured pane has its
+    Claude process (`startup_per_agent_delay` spaces the resumes) or a timeout
+    reports the rest: the server listening is a new pid running
     0.9.3; every captured pane has one Claude process whose
     `CLAUDE_CONFIG_DIR` and bypass match the capture and whose argv ends in
     `--resume <its final id>`; `wY:p2`-style plain panes have no
     `CLAUDE_CONFIG_DIR`; a fresh shell pane has no CLAUDE_* and no
     `HERDR_PANE_ID` but its own. Per-pane mismatch: report with that pane's
     manual command (not a rollback: rolling back loses every variant).
-    Server-level failure (no new server, wrong version): `rollback`.
+    Server-level failure (no new server, wrong version): `rollback`. The
+    fresh shell pane used for the env check is closed before DONE.
 11. Regenerate fish completions; print DONE with the report. The owner
     reattaches with `herdr` only after DONE.
 The operator launches `deploy` with `setsid -f`, output to
@@ -1232,7 +1235,42 @@ the owner restores accounts and bypass by hand; 0.8.0 cannot do it (C2).
 - [ ] G4 live: step 10's report is clean; this session resumed in `wY:p1`;
       sidebar labels show variants.
 
-## 5. Decisions log / open questions## 5. Decisions log / open questions
+**Hardening record (adv_convo_1791387860515; adversary claude/claude-opus-5-5/high
+as claude-kee; judge same tuple; converged round 4, both judges agree on sha
+dd621f39)**
+- Round 1: A1 BLOCKER 11 kee panes use `--permission-mode bypassPermissions`,
+  not kept -> keep list + independent bypass oracle. A2 BLOCKER new server
+  would inherit the operator's `CLAUDE_CONFIG_DIR` -> `env -i` with the old
+  server's environ. A3 MAJOR session-id keyed capture and post-stop abort ->
+  pane-keyed, capture last, never fall back to `claude --resume`. A4 MAJOR
+  owner reattach race -> lock stub + DONE + new-pid check. A5 MAJOR rollback
+  was prose -> executable `rollback`. A6/A7 MINOR.
+- Round 2: B1 MAJOR stub survived early rollback -> `relink()` + marker-aware
+  promote. B2 MAJOR rehearsal targeted live paths -> parameterized roots, G3
+  isolation asserts. B3 MINOR rollback could start a second server -> guard.
+- Round 3: C1(r3) BLOCKER capture with the default socket matched zero panes
+  and passed -> explicit `HERDR_LIVE_SOCKET` + snapshot-derived expected set
+  (G5). C2(r3) MAJOR CLI calls fell back to the live socket in G3 -> one wrapper
+  sets the socket and XDG for every call.
+- Round 4: CONVERGED.
+
+**Accepted execution order**: (1) pre-deploy gates on isolated roots: G2 repeat
+in the operator's launch shape, G3 (a)-(d), then G1 `dry-run` on live roots
+(nothing stops); (2) close the review (manifest terminal, watchdog exited,
+adversary pane closed); (3) `deploy` detached, steps 1-11, `rollback` on any
+failure from step 6; (4) owner reattaches only after DONE, then G4.
+
+**Residual register (accepted)**
+- R1 a rollback leaves accounts and bypass to the owner (printed commands).
+- R2 livelock: a pane holding `agent_session` after its Claude exited, or a
+  Claude started after the last save, makes step 5 refuse until settled.
+- R3 a variant change between step 5 and step 6 restores the captured variant
+  (seconds; lock already in place).
+- R4 integration hook stays v7 vs shipped v10: works, shows an "outdated
+  integration" badge; reinstalling is the owner's call.
+- R5 (folded) step 10 polls and closes its probe pane.
+
+## 5. Decisions log / open questions
 
 - Mode name: `Control` (alternatives considered: `Manage`, `Tab` (too narrow),
   `Command` (collides with prefix-as-command-mode naming in code comments)).
