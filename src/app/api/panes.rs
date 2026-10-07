@@ -1631,6 +1631,9 @@ impl App {
         });
         let applied =
             report_is_newer && self.session_report_applied(ws_idx, pane_id, session_ref.as_ref());
+        if let Some(session_ref) = session_ref.filter(|_| applied && params.resume_argv.is_none()) {
+            self.resolve_agent_launch(ws_idx, pane_id, &params.source, &agent_label, session_ref);
+        }
         self.report_agent_resume(
             id,
             ws_idx,
@@ -1640,6 +1643,123 @@ impl App {
             params.seq.filter(|_| applied),
             applied.then_some(params.resume_argv).flatten(),
         )
+    }
+
+    /// Applies the configured agent variants and kept launch arguments to a
+    /// freshly reported session: the pane shows the variant's name and restores
+    /// through it. Reads the agent process once per session report, never on a
+    /// render path.
+    fn resolve_agent_launch(
+        &mut self,
+        ws_idx: usize,
+        pane_id: crate::layout::PaneId,
+        source: &str,
+        agent_label: &str,
+        session_ref: crate::agent_resume::AgentSessionRef,
+    ) {
+        let keep_args = self
+            .resume_keep_args
+            .get(agent_label)
+            .map(Vec::as_slice)
+            .unwrap_or_default();
+        if keep_args.is_empty()
+            && !self
+                .agent_variants
+                .iter()
+                .any(|variant| variant.agent == agent_label)
+        {
+            return;
+        }
+        let session = crate::agent_resume::PersistedAgentSession {
+            source: source.to_string(),
+            agent: agent_label.to_string(),
+            session_ref,
+        };
+        let profile = self
+            .agent_launch(ws_idx, pane_id, agent_label)
+            .map(|(environ, argv)| {
+                crate::agent_resume::launch_profile(
+                    &session,
+                    &environ,
+                    &argv,
+                    &self.agent_variants,
+                    keep_args,
+                    crate::integration::home_dir().ok().as_deref(),
+                )
+            })
+            .unwrap_or(crate::agent_resume::AgentLaunchProfile {
+                variant: None,
+                resume_argv: None,
+            });
+        self.handle_internal_event(crate::events::AppEvent::AgentLaunchResumeResolved {
+            pane_id,
+            source: source.to_string(),
+            agent_label: agent_label.to_string(),
+            argv: profile.resume_argv,
+        });
+        self.handle_internal_event(crate::events::AppEvent::HookMetadataReported {
+            pane_id,
+            source: source.to_string(),
+            agent_label: Some(agent_label.to_string()),
+            applies_to_source: None,
+            title: None,
+            clear_display_agent: profile.variant.is_none(),
+            display_agent: profile.variant,
+            state_labels: std::collections::HashMap::new(),
+            clear_title: false,
+            clear_state_labels: false,
+            seq: None,
+            ttl: None,
+        });
+    }
+
+    /// Session reports can arrive before process detection, and agents that
+    /// outlived a server handoff never report again, so a newly detected agent
+    /// with a known session is resolved here too.
+    pub(crate) fn resolve_detected_agent_launch(&mut self, pane_id: crate::layout::PaneId) {
+        let Some((ws_idx, _)) = self.find_pane(pane_id) else {
+            return;
+        };
+        let Some(session) = self.pane_terminal(ws_idx, pane_id).and_then(|terminal| {
+            let session = terminal.persisted_agent_session.clone()?;
+            let foreign_resume = terminal.reported_resume().is_some_and(|resume| {
+                resume.source != session.source || resume.agent != session.agent
+            });
+            (!foreign_resume).then_some(session)
+        }) else {
+            return;
+        };
+        self.resolve_agent_launch(
+            ws_idx,
+            pane_id,
+            &session.source,
+            &session.agent,
+            session.session_ref,
+        );
+    }
+
+    /// Environment and argv of the pane's running agent process.
+    fn agent_launch(
+        &self,
+        ws_idx: usize,
+        pane_id: crate::layout::PaneId,
+        agent_label: &str,
+    ) -> Option<(Vec<u8>, Vec<String>)> {
+        let runtime =
+            self.state
+                .runtime_for_pane_in_workspace(&self.terminal_runtimes, ws_idx, pane_id)?;
+        let job = crate::detect::foreground_job(runtime.child_pid()?)?;
+        let (agent, _, pid) = crate::detect::identify_agent_process_in_job(&job)?;
+        if crate::detect::agent_label(agent) != agent_label {
+            return None;
+        }
+        let argv = job
+            .processes
+            .iter()
+            .find(|process| process.pid == pid)
+            .and_then(|process| process.argv.clone())
+            .unwrap_or_default();
+        Some((crate::platform::process_environ(pid)?, argv))
     }
 
     /// A resume command belongs to the session it was reported with, so it is

@@ -1531,6 +1531,18 @@ impl AppState {
                 })
                 .into_iter()
                 .collect(),
+            AppEvent::AgentLaunchResumeResolved {
+                pane_id,
+                source,
+                agent_label,
+                argv,
+            } => self
+                .update_terminal_state(pane_id, |terminal| {
+                    terminal.set_launch_resume(&source, &agent_label, argv);
+                    None
+                })
+                .into_iter()
+                .collect(),
             AppEvent::ReportedAgentShellReturned {
                 pane_id,
                 observed_at,

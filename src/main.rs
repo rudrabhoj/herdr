@@ -430,6 +430,15 @@ const DEFAULT_CONFIG: &str = r##"# herdr configuration
 # resume_agents_on_restore = true
 # Milliseconds between automatic agent restores; 0 starts them without spacing.
 # startup_per_agent_delay_ms = 100
+# Arguments carried into the restore command when the agent was launched with
+# them; a trailing "=" marks a flag that takes a value.
+# resume_keep_args = { claude = ["--dangerously-skip-permissions"] }
+# Wrappers that differ only by environment (e.g. a second Claude account) are
+# shown and restored under their own name:
+# [[session.agent_variants]]
+# agent = "claude"
+# name = "claude-kee"
+# env = { CLAUDE_CONFIG_DIR = "~/.claude-keemakr" }
 
 [remote]
 # Whether herdr manages the ssh config used for `herdr --remote`.

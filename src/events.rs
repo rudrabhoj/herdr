@@ -128,6 +128,14 @@ pub enum AppEvent {
         seq: Option<u64>,
         argv: Vec<String>,
     },
+    /// The server resolved how a reported agent was launched; `None` drops a
+    /// resume command this source recorded earlier.
+    AgentLaunchResumeResolved {
+        pane_id: PaneId,
+        source: String,
+        agent_label: String,
+        argv: Option<Vec<String>>,
+    },
     /// A pane held by a self-reported agent is back at its idle shell.
     ReportedAgentShellReturned {
         pane_id: PaneId,

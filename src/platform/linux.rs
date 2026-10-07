@@ -795,6 +795,19 @@ pub fn process_agent_hint(pid: u32) -> Option<crate::detect::Agent> {
     super::parse_agent_env_hint(&environ)
 }
 
+/// Raw NUL-separated environment of a process, behind the same guard as
+/// `process_agent_hint`.
+pub fn process_environ(pid: u32) -> Option<Vec<u8>> {
+    if pid == 0 {
+        return None;
+    }
+    let (_, comm, state) = process_pgrp_comm_and_state(pid)?;
+    if !process_allows_remote_memory_read(state, &comm, running_inside_wsl()) {
+        return None;
+    }
+    std::fs::read(format!("/proc/{pid}/environ")).ok()
+}
+
 pub fn session_processes(child_pid: u32) -> Vec<u32> {
     let Some(session_id) = process_session_id(child_pid) else {
         return Vec::new();

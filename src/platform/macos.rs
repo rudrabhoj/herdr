@@ -1001,6 +1001,15 @@ pub fn process_agent_hint(pid: u32) -> Option<crate::detect::Agent> {
     super::parse_agent_env_hint(procargs2_env(&buf)?)
 }
 
+/// Raw NUL-separated environment of a process.
+pub fn process_environ(pid: u32) -> Option<Vec<u8>> {
+    if pid == 0 {
+        return None;
+    }
+    let buf = kern_procargs2(pid)?;
+    procargs2_env(&buf).map(<[u8]>::to_vec)
+}
+
 fn procargs2_argv_start(rest: &[u8]) -> Option<usize> {
     let exec_end = rest.iter().position(|&byte| byte == 0)?;
     let mut pos = exec_end;

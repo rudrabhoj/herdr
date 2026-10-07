@@ -1043,6 +1043,40 @@ Upstream also moved the vendored libghostty-vt build to zig 0.16.0.
 - [ ] macOS build with the official zig 0.16.0 tarball not exercised here.
 - [ ] Manual keyboard feel on a real terminal. [needs a human at the keyboard]
 
+### Phase 10 - Agent variants and kept launch args (2026-10-07)
+
+**Why**: `claude-kee` and `claude-me` are fish functions that only change
+`CLAUDE_CONFIG_DIR` (separate logins, shared session store via symlinks, see
+`~/.local/share/claude-accounts/share-sessions.py`). Herdr restored every Claude
+pane as `claude --resume <id>`, so kee panes came back in the wrong account and
+lost `--dangerously-skip-permissions`; the sidebar could not tell them apart.
+
+**Design**: `[session] agent_variants` (agent, name, env match) and
+`resume_keep_args` (per agent; trailing `=` marks a value flag). On an applied
+`pane.report_agent_session` without a self-reported `resume_argv`, and again
+when process detection newly acquires an agent with a known session, the
+server reads the agent process's environment (`platform::process_environ`,
+Linux /proc behind the remote-read guard, macOS KERN_PROCARGS2) and argv, then
+records `ReportedAgentResume` = built-in plan with the variant as command and
+kept args after it (`agent_resume::launch_profile`), and sets a display-only
+`display_agent` label under the official source. No match and no kept args
+drops a resume this source set earlier, so the last-used launch always wins.
+No API or wire change; restore already prefers reported resume commands.
+
+**Verify**
+- [x] Unit: launch_profile matching, `~/` expansion, empty-means-unset, value
+      flags, invalid names rejected; full suite green (one load-sensitive
+      timing test passes 3/3 in isolation).
+- [x] E2E (isolated herdr, real fish + Claude, 44/44): one session hopped
+      claude-kee+bypass -> claude-me -> claude+bypass -> claude-kee, each hop
+      restored after a server restart in the right config dir, with the flag
+      exactly when it was launched with it (argv and Claude's own UI), labeled
+      in herdr, and remembering a codeword from the first turn.
+- [ ] Upgrading the live 0.8.0 server needs a stop (pre-generation-1, no
+      handoff); `~/.local/share/claude-accounts/migrate-herdr-resume.py`
+      captures variants from the live processes and patches the final
+      snapshot so the first restore is already correct.
+
 ## 5. Decisions log / open questions
 
 - Mode name: `Control` (alternatives considered: `Manage`, `Tab` (too narrow),

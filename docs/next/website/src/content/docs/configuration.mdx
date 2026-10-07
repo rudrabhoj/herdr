@@ -562,6 +562,23 @@ startup_per_agent_delay_ms = 100
 
 Automatic restores start one agent at a time, 100 milliseconds apart by default, to reduce startup contention. The first eligible agent starts immediately. Set `startup_per_agent_delay_ms = 0` to disable spacing. Manual launches and explicit terminal attaches are unaffected. Restart the Herdr server to apply changes.
 
+Agents launched through a wrapper that only changes their environment, such as a second Claude Code account in its own `CLAUDE_CONFIG_DIR`, can be declared as variants. When a session is reported, Herdr reads the running agent's environment; the first `[[session.agent_variants]]` entry whose `env` all matches names the pane in the sidebar and becomes the restore command, so a shell function or alias such as `claude-kee` works. A leading `~/` expands to the home directory, and an empty value matches an unset variable. `resume_keep_args` lists, per agent, launch arguments carried into the restore command when the agent was started with them; an entry ending in `=` is a flag that takes a value. Supported on Linux and macOS.
+
+```toml
+[session]
+resume_keep_args = { claude = ["--dangerously-skip-permissions"] }
+
+[[session.agent_variants]]
+agent = "claude"
+name = "claude-kee"
+env = { CLAUDE_CONFIG_DIR = "~/.claude-keemakr" }
+
+[[session.agent_variants]]
+agent = "claude"
+name = "claude"
+env = { CLAUDE_CONFIG_DIR = "" }
+```
+
 Only panes with a valid native session reference from an official integration can resume; other panes restore as normal shells. See [Session state and restore](/docs/session-state/) for supported Agents and persistence behavior.
 
 ## IME cursor tracking

@@ -2027,6 +2027,29 @@ impl TerminalState {
         }
     }
 
+    /// Records the restore command the server derived from the running agent's
+    /// launch. It skips the reporter checks in `record_reported_resume`: the
+    /// server found the agent process itself, which can happen before process
+    /// detection has caught up. `None` drops an earlier command from this
+    /// source so a stale variant never outlives a newer session report.
+    pub fn set_launch_resume(
+        &mut self,
+        source: &str,
+        agent_label: &str,
+        argv: Option<Vec<String>>,
+    ) {
+        match argv {
+            Some(argv) => {
+                self.set_reported_resume(Some(crate::agent_resume::ReportedAgentResume {
+                    source: source.to_string(),
+                    agent: agent_label.to_string(),
+                    argv,
+                }))
+            }
+            None => self.forget_reported_resume_of(source, agent_label),
+        }
+    }
+
     pub fn restore_reported_resume(&mut self, resume: crate::agent_resume::ReportedAgentResume) {
         self.set_reported_resume(Some(resume));
     }

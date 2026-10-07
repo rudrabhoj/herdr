@@ -317,6 +317,111 @@ pub fn plan(source: &str, agent: &str, session_ref: &AgentSessionRef) -> Option<
     })
 }
 
+/// How a running agent was launched, as far as restore and display care.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct AgentLaunchProfile {
+    /// Name of the matched configured variant.
+    pub variant: Option<String>,
+    /// Restore command when it differs from the built-in plan.
+    pub resume_argv: Option<Vec<String>>,
+}
+
+/// Matches a running agent's environment and argv against the configured
+/// variants and kept arguments. The built-in plan supplies the session
+/// arguments; the variant replaces the command, and kept launch arguments
+/// follow it, so `claude-kee --dangerously-skip-permissions --resume <id>`
+/// restores the same account with the same permissions.
+pub(crate) fn launch_profile(
+    session: &PersistedAgentSession,
+    environ: &[u8],
+    argv: &[String],
+    variants: &[crate::config::AgentVariantConfig],
+    keep_args: &[String],
+    home: Option<&Path>,
+) -> AgentLaunchProfile {
+    let variant = variants
+        .iter()
+        .find(|variant| {
+            variant.agent == session.agent
+                && variant.env.iter().all(|(name, expected)| {
+                    let actual = environ_var(environ, name).unwrap_or_default();
+                    same_env_value(&expand_home(expected, home), &actual)
+                })
+        })
+        .map(|variant| variant.name.clone());
+    let kept = kept_launch_args(argv, keep_args);
+    let resume_argv = (variant.is_some() || !kept.is_empty())
+        .then(|| plan(&session.source, &session.agent, &session.session_ref))
+        .flatten()
+        .map(|plan| {
+            let mut argv = plan.argv;
+            if let Some(name) = &variant {
+                argv[0] = name.clone();
+            }
+            argv.splice(1..1, kept);
+            argv
+        })
+        .filter(|argv| validate_resume_argv(argv).is_ok());
+    AgentLaunchProfile {
+        variant,
+        resume_argv,
+    }
+}
+
+/// `--flag` keeps that exact boolean argument. `--flag=` keeps a value flag in
+/// either `--flag=value` or `--flag value` form; a following argument that
+/// looks like an option is not taken as its value.
+fn kept_launch_args(argv: &[String], keep_args: &[String]) -> Vec<String> {
+    let mut kept = Vec::new();
+    let mut args = argv.iter().skip(1).peekable();
+    while let Some(arg) = args.next() {
+        for keep in keep_args {
+            if let Some(flag) = keep.strip_suffix('=') {
+                if arg
+                    .strip_prefix(flag)
+                    .is_some_and(|rest| rest.starts_with('='))
+                {
+                    kept.push(arg.clone());
+                } else if arg == flag {
+                    if let Some(value) = args.next_if(|value| !value.starts_with('-')) {
+                        kept.extend([arg.clone(), value.clone()]);
+                    }
+                }
+            } else if arg == keep {
+                kept.push(arg.clone());
+            }
+        }
+    }
+    kept
+}
+
+fn environ_var(environ: &[u8], name: &str) -> Option<String> {
+    environ.split(|&byte| byte == 0).find_map(|record| {
+        let value = record.strip_prefix(name.as_bytes())?.strip_prefix(b"=")?;
+        String::from_utf8(value.to_vec()).ok()
+    })
+}
+
+fn expand_home(value: &str, home: Option<&Path>) -> String {
+    match (value.strip_prefix("~/"), home) {
+        (Some(rest), Some(home)) => home.join(rest).display().to_string(),
+        _ => value.to_string(),
+    }
+}
+
+/// Directory-valued variables are often written with or without a trailing
+/// slash, so that difference does not count.
+fn same_env_value(expected: &str, actual: &str) -> bool {
+    let trim = |value: &str| {
+        if value.len() > 1 {
+            value.trim_end_matches('/').to_string()
+        } else {
+            value.to_string()
+        }
+    };
+    trim(expected) == trim(actual)
+}
+
 pub fn dedupe_key(source: &str, agent: &str, session_ref: &AgentSessionRef) -> String {
     format!(
         "{source}\u{0}{agent}\u{0}{:?}\u{0}{}",
@@ -949,5 +1054,154 @@ mod tests {
             &AgentSessionRef::path(&agy_session).unwrap()
         )
         .is_none());
+    }
+
+    fn variant(name: &str, env: &[(&str, &str)]) -> crate::config::AgentVariantConfig {
+        crate::config::AgentVariantConfig {
+            agent: "claude".into(),
+            name: name.into(),
+            env: env
+                .iter()
+                .map(|(key, value)| (key.to_string(), value.to_string()))
+                .collect(),
+        }
+    }
+
+    fn claude_session() -> PersistedAgentSession {
+        PersistedAgentSession {
+            source: "herdr:claude".into(),
+            agent: "claude".into(),
+            session_ref: AgentSessionRef::id("abc-123").unwrap(),
+        }
+    }
+
+    #[test]
+    fn launch_profile_restores_the_matching_variant_with_kept_args() {
+        let home = Path::new("/home/me");
+        let variants = [
+            variant("claude-kee", &[("CLAUDE_CONFIG_DIR", "~/.claude-keemakr")]),
+            variant("claude-me", &[("CLAUDE_CONFIG_DIR", "~/.claude")]),
+            variant("claude", &[("CLAUDE_CONFIG_DIR", "")]),
+        ];
+        let keep = [
+            "--dangerously-skip-permissions".to_string(),
+            "--model=".to_string(),
+            "--permission-mode=".to_string(),
+        ];
+        let launched = argv(&[
+            "/home/me/.local/bin/claude",
+            "--dangerously-skip-permissions",
+            "--model=opus",
+            "--permission-mode",
+            "plan",
+            "--verbose",
+            "fix the bug",
+        ]);
+
+        let kee = launch_profile(
+            &claude_session(),
+            b"PATH=/bin\0CLAUDE_CONFIG_DIR=/home/me/.claude-keemakr/\0",
+            &launched,
+            &variants,
+            &keep,
+            Some(home),
+        );
+        assert_eq!(kee.variant.as_deref(), Some("claude-kee"));
+        assert_eq!(
+            kee.resume_argv,
+            Some(argv(&[
+                "claude-kee",
+                "--dangerously-skip-permissions",
+                "--model=opus",
+                "--permission-mode",
+                "plan",
+                "--resume",
+                "abc-123"
+            ]))
+        );
+
+        // A value flag never swallows a following option.
+        assert_eq!(
+            kept_launch_args(&argv(&["claude", "--model", "--verbose"]), &keep),
+            Vec::<String>::new()
+        );
+
+        let me = launch_profile(
+            &claude_session(),
+            b"CLAUDE_CONFIG_DIR=/home/me/.claude\0",
+            &argv(&["claude"]),
+            &variants,
+            &keep,
+            Some(home),
+        );
+        assert_eq!(me.variant.as_deref(), Some("claude-me"));
+        assert_eq!(
+            me.resume_argv,
+            Some(argv(&["claude-me", "--resume", "abc-123"]))
+        );
+
+        // An empty expected value matches an unset variable.
+        let plain = launch_profile(
+            &claude_session(),
+            b"PATH=/bin\0",
+            &argv(&["claude"]),
+            &variants,
+            &keep,
+            Some(home),
+        );
+        assert_eq!(plain.variant.as_deref(), Some("claude"));
+    }
+
+    #[test]
+    fn launch_profile_keeps_the_builtin_plan_without_variant_or_kept_args() {
+        let other = launch_profile(
+            &claude_session(),
+            b"CLAUDE_CONFIG_DIR=/elsewhere\0",
+            &argv(&["claude", "--verbose"]),
+            &[variant("claude-kee", &[("CLAUDE_CONFIG_DIR", "/kee")])],
+            &["--dangerously-skip-permissions".to_string()],
+            None,
+        );
+        assert_eq!(
+            other,
+            AgentLaunchProfile {
+                variant: None,
+                resume_argv: None
+            }
+        );
+
+        // Kept args alone still produce a restore command, with the stock command.
+        let flags_only = launch_profile(
+            &claude_session(),
+            b"",
+            &argv(&["claude", "--dangerously-skip-permissions"]),
+            &[],
+            &["--dangerously-skip-permissions".to_string()],
+            None,
+        );
+        assert_eq!(flags_only.variant, None);
+        assert_eq!(
+            flags_only.resume_argv,
+            Some(argv(&[
+                "claude",
+                "--dangerously-skip-permissions",
+                "--resume",
+                "abc-123"
+            ]))
+        );
+    }
+
+    #[test]
+    fn launch_profile_rejects_variant_names_restore_cannot_type() {
+        let profile = launch_profile(
+            &claude_session(),
+            b"",
+            &argv(&["claude"]),
+            &[variant("/opt/bin/claude", &[])],
+            &[],
+            None,
+        );
+        assert_eq!(profile.variant.as_deref(), Some("/opt/bin/claude"));
+        assert_eq!(profile.resume_argv, None);
     }
 }

@@ -1,4 +1,7 @@
-use std::{collections::BTreeSet, num::NonZeroUsize};
+use std::{
+    collections::{BTreeSet, HashMap},
+    num::NonZeroUsize,
+};
 
 use crossterm::event::KeyModifiers;
 use serde::{de, Deserialize, Deserializer, Serialize};
@@ -270,6 +273,15 @@ pub struct SessionConfig {
     pub resume_agents_on_restore: bool,
     /// Milliseconds between automatic agent restores. Zero disables spacing.
     pub startup_per_agent_delay_ms: u32,
+    /// Launchers for one agent that differ only by environment, such as a
+    /// second Claude Code account. A running agent whose environment matches a
+    /// variant is shown under the variant's name and restored with it.
+    pub agent_variants: Vec<AgentVariantConfig>,
+    /// Per agent, launch arguments carried into the restore command when the
+    /// running agent was started with them, e.g.
+    /// `{ claude = ["--dangerously-skip-permissions", "--permission-mode="] }`.
+    /// A trailing `=` marks a flag that takes a value.
+    pub resume_keep_args: HashMap<String, Vec<String>>,
 }
 
 impl Default for SessionConfig {
@@ -277,8 +289,24 @@ impl Default for SessionConfig {
         Self {
             resume_agents_on_restore: true,
             startup_per_agent_delay_ms: 100,
+            agent_variants: Vec::new(),
+            resume_keep_args: HashMap::new(),
         }
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct AgentVariantConfig {
+    /// Agent this variant launches, e.g. "claude".
+    pub agent: String,
+    /// Label shown for the pane and the command typed into the shell on
+    /// restore; a shell function or alias name works.
+    pub name: String,
+    /// Environment the running agent must have, all entries matching. A
+    /// leading `~/` expands to the home directory; an empty value matches an
+    /// unset variable.
+    #[serde(default)]
+    pub env: HashMap<String, String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, schemars::JsonSchema)]

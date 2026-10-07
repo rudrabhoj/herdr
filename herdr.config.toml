@@ -94,3 +94,26 @@ prompt_new_tab_name = false
 
 [ui.toast]
 delivery = "system"
+
+[session]
+# Keep the permission bypass when herdr restores a Claude pane.
+resume_keep_args = { claude = ["--dangerously-skip-permissions"] }
+
+# Claude accounts (fish functions in conf.d/claude-accounts.fish). herdr reads
+# CLAUDE_CONFIG_DIR from the running claude, shows the matching name, and
+# restores through it, so a session resumed in another account restores in the
+# account it was last used with. Plain `claude` has no CLAUDE_CONFIG_DIR.
+[[session.agent_variants]]
+agent = "claude"
+name = "claude-kee"
+env = { CLAUDE_CONFIG_DIR = "~/.claude-keemakr" }
+
+[[session.agent_variants]]
+agent = "claude"
+name = "claude-me"
+env = { CLAUDE_CONFIG_DIR = "~/.claude" }
+
+[[session.agent_variants]]
+agent = "claude"
+name = "claude"
+env = { CLAUDE_CONFIG_DIR = "" }

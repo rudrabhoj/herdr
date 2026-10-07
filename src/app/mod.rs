@@ -141,6 +141,8 @@ pub struct App {
     pub(crate) agent_metadata_deadline: Option<Instant>,
     pub(crate) pending_agent_resume_deadline: Option<Instant>,
     startup_per_agent_delay: Duration,
+    agent_variants: Vec<crate::config::AgentVariantConfig>,
+    resume_keep_args: std::collections::HashMap<String, Vec<String>>,
     next_agent_resume_at: Option<Instant>,
     pub(crate) session_save_deadline: Option<Instant>,
     pub(crate) session_save_thread: Option<std::thread::JoinHandle<()>>,
@@ -654,6 +656,8 @@ impl App {
             startup_per_agent_delay: Duration::from_millis(
                 config.session.startup_per_agent_delay_ms.into(),
             ),
+            agent_variants: config.session.agent_variants.clone(),
+            resume_keep_args: config.session.resume_keep_args.clone(),
             next_agent_resume_at: None,
             session_save_deadline: None,
             session_save_thread: None,
@@ -920,6 +924,10 @@ impl App {
             }
         }
 
+        if !invalid_section("session") {
+            self.agent_variants = config.session.agent_variants.clone();
+            self.resume_keep_args = config.session.resume_keep_args.clone();
+        }
         if !invalid_section("session")
             && Duration::from_millis(config.session.startup_per_agent_delay_ms.into())
                 != self.startup_per_agent_delay
