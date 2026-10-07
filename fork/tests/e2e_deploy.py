@@ -228,6 +228,14 @@ env = {{ CLAUDE_CONFIG_DIR = "{r.r}/ctest" }}
         r.cli(NEW, "pane", "report-agent-session", p1, "--source", "herdr:claude", "--agent", "claude",
               "--agent-session-id", claude_id, "--seq", str(time.time_ns()))
         codex_id = r.stub_args("codex")[0] and next((r.r / "codex/thread-writer-locks").iterdir()).stem
+        # A state report that FIRST establishes a session (SessionStart missed)
+        # must resolve it; codex refuses state reports that replace an
+        # established session by design (terminal/state.rs codex guard).
+        r.cli(NEW, "pane", "report-agent", p2, "--source", "herdr:codex", "--agent", "codex",
+              "--state", "working", "--agent-session-id", codex_id, "--seq", str(time.time_ns()))
+        check("A: a state report that first establishes a session resolves the codex restore command",
+              wait(lambda: any(a[:2] == ["codex", "resume"] and a[-1] == codex_id for a in r.snapshot_resumes()), 20),
+              str(r.snapshot_resumes()))
         hook = r.r / "codex/herdr-agent-state.sh"
         env = dict(r.env, HERDR_ENV="1", HERDR_SOCKET_PATH=str(r.sock), HERDR_PANE_ID=p2)
         payload = {"hook_event_name": "SessionStart", "session_id": codex_id,
@@ -248,15 +256,6 @@ env = {{ CLAUDE_CONFIG_DIR = "{r.r}/ctest" }}
               wait(lambda: r.labels(NEW).get(p2) == "codex · d@test.dev", 15), str(r.labels(NEW)))
         check("A: pi label follows an account switch",
               wait(lambda: r.labels(NEW).get(p3) == "pi · q@test.dev", 15), str(r.labels(NEW)))
-        # A state report that first establishes a session (codex /new seen
-        # only through UserPromptSubmit) must re-resolve once.
-        new_codex = str(uuid.uuid4())
-        r.cli(NEW, "pane", "report-agent", p2, "--source", "herdr:codex", "--agent", "codex",
-              "--state", "working", "--agent-session-id", new_codex, "--seq", str(time.time_ns()))
-        check("A: a state report with a new session moves the codex restore command",
-              wait(lambda: any(a[-1] == new_codex and a[:2] == ["codex", "resume"] for a in r.snapshot_resumes()), 20),
-              str(r.snapshot_resumes()))
-        codex_id = new_codex
         want = {
             "claude": ["claude-test", "--dangerously-skip-permissions", "--resume", claude_id],
             "codex": ["codex", "resume", "-m", "gpt-6-astra", "--search",
@@ -440,7 +439,8 @@ def failing_new_bin(r):
 
 
 if __name__ == "__main__":
-    for scenario in (scenario_a, scenario_b, scenario_c):
+    chosen = sys.argv[2:] or ["a", "b", "c"]
+    for scenario in [globals()[f"scenario_{name}"] for name in chosen]:
         try:
             scenario()
         except Exception as err:
