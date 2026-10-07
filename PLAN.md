@@ -1577,6 +1577,14 @@ skipped silently. It was harmless this run: the old codex (13982) had already
 exited and only the restored one (19713) holds the thread. Fixed by assigning
 the list first, so `set -e` aborts and the EXIT trap rolls back.
 
+Post-deploy (17:45): the Claude hook went from v7 to v10 in both config dirs
+(backup `~/.local/share/claude-accounts/pre-hook-v10-20261007T174536/`).
+`~/.claude-keemakr/settings.json` is a symlink to `~/.claude/settings.json`, so
+running the installer in both dirs left two SessionStart entries. One was
+removed, and the single entry runs the keemakr script. Checked on a throwaway
+server: SessionStart reported the session, and the label and the restore
+`claude-kee --dangerously-skip-permissions --resume <id>` were right.
+
 ## 5. Decisions log / open questions
 
 - Mode name: `Control` (alternatives considered: `Manage`, `Tab` (too narrow),
