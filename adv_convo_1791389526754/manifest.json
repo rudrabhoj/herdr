@@ -25,7 +25,7 @@
   "judge": "inherited"
  },
  "status": "open",
- "round": 1,
+ "round": 2,
  "cap": 4,
  "resumable": true,
  "cap_note": "owner: 'remember to not over waste tokens' - cap 4",
@@ -37,6 +37,7 @@
  },
  "target_sha_at_round": {
   "0": "14a57052dd83ccefeb6d85dd5aa17430059aae1e4097a5250a3d8dfeee8ef92a",
-  "1": "eef4936d18d17cf5bac1934db3d6d6cac929039781f68142aec9ca4380bca138"
+  "1": "eef4936d18d17cf5bac1934db3d6d6cac929039781f68142aec9ca4380bca138",
+  "2": "fac8aef38bab40de4a7819fb41e886af32542aec788ef71fae06d33671edf812"
  }
 }
