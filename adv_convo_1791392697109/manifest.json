@@ -1,0 +1,37 @@
+{
+ "target": "/home/rudrabhoj/Dev/herdr_and_claude/herdr/PLAN.md",
+ "scope": "Phase 13 - Deploy readiness review: the BUILT Phase 10-12 code, fork/ tooling and tests, and the Phase 12 implementation record's coverage claims. Plan text of Phases 0-12 is converged prior scope; the implementation is in scope.",
+ "created_at": "2026-10-07T17:04:57.109000+00:00",
+ "implementer": {
+  "kind": "claude",
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "pane": "wY:p1"
+ },
+ "adversary": {
+  "name": "adv_1791392697109",
+  "kind": "claude",
+  "model": "claude-opus-5-5",
+  "effort": "high"
+ },
+ "judge": {
+  "kind": "claude",
+  "model": "claude-opus-5-5",
+  "effort": "high"
+ },
+ "role_source": {
+  "adversary": "explicit",
+  "judge": "inherited"
+ },
+ "status": "open",
+ "round": 0,
+ "cap": 3,
+ "resumable": true,
+ "cap_note": "owner: do not over-waste tokens - cap 3",
+ "authorities": {
+  "artifacts": "/home/rudrabhoj/Dev/herdr_and_claude/herdr (repo, fork/) + staged binary ~/.local/share/herdr/staged/herdr-fb11df79 + live state read-only",
+  "intent": "/home/rudrabhoj/Dev/herdr_and_claude/herdr/research/intent.md",
+  "reference": "/home/rudrabhoj/.claude-keemakr/skills/long-yolo-harden-plan/references/reference-plan.md",
+  "reference_index": "/home/rudrabhoj/.claude-keemakr/skills/long-yolo-harden-plan/references/reference-plan-index.md"
+ }
+}
