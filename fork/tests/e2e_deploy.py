@@ -248,6 +248,15 @@ env = {{ CLAUDE_CONFIG_DIR = "{r.r}/ctest" }}
               wait(lambda: r.labels(NEW).get(p2) == "codex · d@test.dev", 15), str(r.labels(NEW)))
         check("A: pi label follows an account switch",
               wait(lambda: r.labels(NEW).get(p3) == "pi · q@test.dev", 15), str(r.labels(NEW)))
+        # A state report that first establishes a session (codex /new seen
+        # only through UserPromptSubmit) must re-resolve once.
+        new_codex = str(uuid.uuid4())
+        r.cli(NEW, "pane", "report-agent", p2, "--source", "herdr:codex", "--agent", "codex",
+              "--state", "working", "--agent-session-id", new_codex, "--seq", str(time.time_ns()))
+        check("A: a state report with a new session moves the codex restore command",
+              wait(lambda: any(a[-1] == new_codex and a[:2] == ["codex", "resume"] for a in r.snapshot_resumes()), 20),
+              str(r.snapshot_resumes()))
+        codex_id = new_codex
         want = {
             "claude": ["claude-test", "--dangerously-skip-permissions", "--resume", claude_id],
             "codex": ["codex", "resume", "-m", "gpt-6-astra", "--search",
@@ -277,8 +286,9 @@ env = {{ CLAUDE_CONFIG_DIR = "{r.r}/ctest" }}
         check("A: isolated processes gone", not left, str(left))
 
 
-def prepare_old(name):
+def prepare_old(name, server_env=None, server_cwd=None):
     r = Root(name)
+    r.env.update(server_env or {})
     shutil.copy2(OLD, r.r / "vw/releases/old/bin/herdr")
     os.symlink("releases/old", r.r / "vw/current")
     os.symlink(r.r / "vw/current/bin/herdr", r.r / "bin/herdr")
@@ -287,7 +297,14 @@ def prepare_old(name):
         shutil.copy2(ACCOUNTS / f, r.r / "work" / f)
     (r.r / "codex/auth.json").write_text(json.dumps({"tokens": {"id_token": jwt({"email": "c@test.dev"})}}))
     old = r.r / "bin/herdr"
-    check(f"{name}: old 0.8.0 server up", r.start(old))
+    if server_cwd:
+        cwd = r.r / server_cwd
+        cwd.mkdir()
+        subprocess.Popen(["setsid", "-f", str(old), "server"], env=r.env, cwd=str(cwd),
+                         stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        check(f"{name}: old 0.8.0 server up", wait(lambda: r.owner(), 20))
+    else:
+        check(f"{name}: old 0.8.0 server up", r.start(old))
     ws = r.cli(old, "workspace", "create", "--label", "old", "--cwd", str(r.r))
     p1 = ws["root_pane"]["pane_id"]
     p2 = r.cli(old, "pane", "split", p1, "--direction", "right")["pane"]["pane_id"]
@@ -316,7 +333,8 @@ def run_deploy(r, mode="deploy", extra=None):
     env.update(BIN_DIR=str(r.r / "bin"), VW_BASE=str(r.r / "vw"), HERDR_CFG=str(r.r / "c/herdr"),
                WORK=str(r.r / "work"), CODEX_HOME_DIR=str(r.r / "codex"), PI_AGENT_DIR=str(r.r / "pi/agent"),
                FISH_COMPLETIONS=str(r.r / "none/x"), REVIEW_DIR=str(r.r / "none"), NEW_REL="new",
-               NEW_BIN=str(NEW), VERIFY_TIMEOUT="60", **(extra or {}))
+               NEW_BIN=str(NEW), VERIFY_TIMEOUT="60")
+    env.update(extra or {})
     log = r.r / f"{mode}.out"
     with open(log, "w") as out:
         subprocess.run(["setsid", "-f", "bash", str(r.r / "work/deploy-herdr.sh"), mode],
@@ -365,25 +383,60 @@ def scenario_b():
         check("B: isolated processes gone", not left, str(left))
 
 
-def scenario_c():
-    r, old, panes, ids = prepare_old("dc")
+def injected(name, label, inject, expect_rollback, deploy_extra=None, **prep):
+    r, old, panes, ids = prepare_old(name, **prep)
     try:
+        before_pid = r.owner()
+        inject(r)
+        out = run_deploy(r, extra=deploy_extra(r) if deploy_extra else None)
+        (r.r / "deploy.log").write_text(out)
+        if expect_rollback is None:
+            check(f"C/{label}: deploy reaches DONE", "DONE." in out, out[-500:])
+            left = r.teardown(r.r / "vw/releases/new/bin/herdr", r.r / "vw/releases/old/bin/herdr")
+            check(f"C/{label}: isolated processes gone", not left, str(left))
+            return
+        if expect_rollback:
+            check(f"C/{label}: automatic rollback ran", "rolling back" in out, out[-500:])
+        else:
+            check(f"C/{label}: aborted before the stop, lock released",
+                  "releasing the herdr lock" in out and r.owner() == before_pid, out[-500:])
+        link = os.readlink(r.r / "bin/herdr")
+        check(f"C/{label}: herdr is the release symlink, not the lock stub",
+              link == str(r.r / "vw/current/bin/herdr"), link)
+        version = subprocess.run([str(r.r / "bin/herdr"), "--version"], capture_output=True, text=True).stdout
+        check(f"C/{label}: herdr --version is 0.8.0", "0.8.0" in version, version)
+        check(f"C/{label}: an old server is serving",
+              wait(lambda: r.owner() and os.path.realpath(f"/proc/{r.owner()}/exe")
+                   == os.path.realpath(r.r / "vw/releases/old/bin/herdr"), 30))
+    finally:
+        left = r.teardown(r.r / "vw/releases/old/bin/herdr", r.r / "vw/releases/new/bin/herdr")
+        check(f"C/{label}: isolated processes gone", not left, str(left))
+
+
+def fail_migrate(step):
+    def inject(r):
         wrapper = r.r / "work/migrate-herdr-resume.py"
         real = r.r / "work/migrate-real.py"
         wrapper.rename(real)
-        wrapper.write_text(f'import sys, runpy\nif sys.argv[1] == "apply": sys.exit("injected apply failure")\n'
+        wrapper.write_text(f'import sys, runpy\nif sys.argv[1] == "{step}": sys.exit("injected {step} failure")\n'
                            f'sys.argv[0] = "{real}"\nrunpy.run_path("{real}", run_name="__main__")\n')
-        out = run_deploy(r)
-        (r.r / "deploy.log").write_text(out)
-        check("C: apply failure triggers the automatic rollback", "rolling back" in out, out[-500:])
-        link = os.readlink(r.r / "bin/herdr")
-        check("C: herdr is the release symlink, not the lock stub", link == str(r.r / "vw/current/bin/herdr"), link)
-        version = subprocess.run([str(r.r / "bin/herdr"), "--version"], capture_output=True, text=True).stdout
-        check("C: herdr --version is 0.8.0", "0.8.0" in version, version)
-        check("C: old server serving", wait(lambda: r.owner(), 20))
-    finally:
-        left = r.teardown(r.r / "vw/releases/old/bin/herdr", r.r / "vw/releases/new/bin/herdr")
-        check("C: isolated processes gone", not left, str(left))
+    return inject
+
+
+def scenario_c():
+    injected("dc", "apply", fail_migrate("apply"), True)
+    injected("dd", "capture", fail_migrate("capture"), False)
+    injected("de", "verify", lambda r: None, True, server_env={"HERDR_PANE_ID": "leaked:p1"})
+    injected("df", "deleted cwd still deploys", lambda r: shutil.rmtree(r.r / "oldcwd"), None,
+             server_cwd="oldcwd")
+    injected("dg", "new server fails to start", lambda r: None, True, deploy_extra=failing_new_bin)
+
+
+def failing_new_bin(r):
+    wrapper = r.r / "none/herdr-fails-server"
+    wrapper.write_text(f'#!/bin/sh\n[ "$1" = server ] && exit 1\nexec {NEW} "$@"\n')
+    wrapper.chmod(0o755)
+    return {"NEW_BIN": str(wrapper), "VERIFY_TIMEOUT": "20"}
 
 
 if __name__ == "__main__":

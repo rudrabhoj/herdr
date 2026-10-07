@@ -1807,6 +1807,12 @@ impl App {
         let mut changed = false;
         let mut stale = Vec::new();
         let mut updates = Vec::new();
+        // Many panes share one account file (14 kee panes, one 250 KB
+        // .claude.json): stat and parse each file at most once per poll.
+        let mut files: std::collections::HashMap<
+            std::path::PathBuf,
+            (Option<std::time::SystemTime>, Option<Option<String>>),
+        > = std::collections::HashMap::new();
         for (pane_id, watch) in &self.agent_account_watches {
             let alive = self.find_pane(*pane_id).is_some_and(|(ws_idx, _)| {
                 self.pane_terminal(ws_idx, *pane_id)
@@ -1821,11 +1827,17 @@ impl App {
             let Some(account) = watch.account.as_ref() else {
                 continue;
             };
-            let modified = file_modified(account.path());
+            let entry = files
+                .entry(account.path().to_path_buf())
+                .or_insert_with(|| (file_modified(account.path()), None));
+            let modified = entry.0;
             if modified == watch.modified {
                 continue;
             }
-            let email = crate::agent_account::read_account(account);
+            let email = entry
+                .1
+                .get_or_insert_with(|| crate::agent_account::read_account(account))
+                .clone();
             let label = crate::agent_account::account_label(&watch.base, email.as_deref());
             updates.push((*pane_id, modified, label));
         }

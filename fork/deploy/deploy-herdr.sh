@@ -23,6 +23,8 @@ SOCK=$HERDR_CFG/herdr.sock
 MIGRATE=${MIGRATE:-$(dirname "$(readlink -f "$0")")/migrate-herdr-resume.py}
 LOCK_MARKER='# herdr-deploy-lock'
 STOPPED=0
+LOCKED=0
+FINISHED=0
 REPORT=()
 
 log() { printf '%s %s\n' "$(date -u +%H:%M:%S)" "$*"; }
@@ -62,7 +64,8 @@ start_server() { # start_server <binary>
     local cwd envv
     cwd=$(cat "$RUN/server.cwd")
     mapfile -d '' envv <"$RUN/server.environ"
-    (cd "$cwd" && setsid -f env -i "${envv[@]}" "$1" server </dev/null >>"$RUN/server.out" 2>&1)
+    # The old server's cwd may be gone ("<dir> (deleted)"); a server can start anywhere.
+    (cd "$cwd" 2>/dev/null || cd "$HOME"; setsid -f env -i "${envv[@]}" "$1" server </dev/null >>"$RUN/server.out" 2>&1)
 }
 
 wait_gone() { # wait_gone <seconds> <pid>...
@@ -292,15 +295,19 @@ for pane, e in sorted(cap.get("codex", {}).items()):
 PY
 }
 
-on_error() {
-    local line=$1
+# One EXIT trap sees every way out: set -e inside functions, die (exit 1),
+# and plain failures. An ERR trap misses the first two.
+on_exit() {
+    local status=$?
+    trap - EXIT
+    [ "$FINISHED" = 1 ] && exit 0
     if [ "$STOPPED" = 1 ]; then
-        log "error at line $line after the stop: rolling back"
+        log "failed (exit $status) after the stop: rolling back"
         STOPPED=0
-        rollback "$RUN" || true
-    else
-        log "error at line $line before the stop: nothing stopped"
-        [ "${LOCKED:-0}" = 1 ] && relink
+        rollback "$RUN" || log "ROLLBACK FAILED - see $RUN/log; old release is releases/$(cat "$RUN/old_rel")"
+    elif [ "$LOCKED" = 1 ]; then
+        log "failed (exit $status) before the stop: nothing stopped, releasing the herdr lock"
+        relink
     fi
     exit 1
 }
@@ -314,7 +321,7 @@ main() {
     RUN=$WORK/deploy-$(date +%Y%m%dT%H%M%S)
     mkdir -p "$RUN"
     exec > >(tee -a "$RUN/log") 2>&1
-    trap 'on_error $LINENO' ERR
+    trap on_exit EXIT
     log "$mode: new $NEW_BIN, release $NEW_REL, run dir $RUN"
     render_config
     stage
@@ -322,6 +329,7 @@ main() {
     if [ "$mode" = dry-run ]; then
         capture
         log "DRY RUN OK: nothing stopped, live config and links untouched"
+        FINISHED=1
         exit 0
     fi
     ln -sfn "$RUN" "$WORK/deploy-last"
@@ -362,6 +370,7 @@ main() {
         log "codex panes open on 'Hooks need review': choose 'Trust all and continue' once."
     fi
     for line in "${REPORT[@]}"; do log "REPORT: $line"; done
+    FINISHED=1
 }
 
 main "$@"
