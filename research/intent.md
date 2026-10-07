@@ -77,3 +77,32 @@ ruling) / PROPOSAL (my default, owner may override).
   (>= 4 GB) for a full compile or accept that residual.
 - PROPOSAL (proceeding under it; owner may override): `~/.local/share/herdr`
   as the home for the zig tarball / patched lib copy / wrapper (XDG data dir).
+
+# Intent record: Claude accounts, herdr agent variants, live deployment (2026-10-07)
+Owner: Rudrabhoj Bhati. Source: the 2026-10-07 Claude session (owner words quoted
+near-verbatim). Tiers as above.
+
+- RULED: "is it possible for them [claude, claude-kee] to be able to resume each
+  other's session and still not share auth? Can you fix this and validate this?"
+- RULED: herdr must restore the variant a pane last used: "if we start a session
+  in claude-kee but we closed and resumed it in claude, and herdr is closed it
+  should still use the last used session properly"; patch "at herdr level to
+  recognize from a config valid alternatives to claude".
+- RULED: "make sure there is a way for herdr to properly tell us if we are
+  running session in claude or claude-kee and future alternatives too".
+- RULED: "it forgets my --dangerously-skip-permissions when resuming which is
+  bad"; "if dangerously bypass permissions shit is enabled it resumes with that
+  if it isn't, then it doesn't".
+- RULED: the ~/Work/keemakr directory auto-switch for Claude "should not exist
+  ... that was old rule which is not needed at all".
+- RULED: accounts as of 2026-10-07: claude/claude-me = ashima@rudrabhoj.com
+  ("This is correct"); claude-kee stays on rudrabhoj@gmail.com "for now".
+- RULED: everything validated end to end "without ruining our current shit";
+  "make sure you really free up all resources directly and indirectly created".
+- RULED: "think deeply what you may have missed ... migration related issues and
+  things are actually working ... make sure we do not waste huge tokens in
+  testing".
+- DERIVED: the live herdr (void-workstation release 20260906, herdr 0.8.0, 15
+  running Claude panes) must reach the fork build without losing any Claude
+  conversation, account, or bypass flag; the deployment is the irreversible step.
+- RULED (standing, Phase 8): "it must never break my installed herdr".

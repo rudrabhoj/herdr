@@ -1077,6 +1077,82 @@ No API or wire change; restore already prefers reported resume commands.
       captures variants from the live processes and patches the final
       snapshot so the first restore is already correct.
 
+### Phase 11 - Live deployment and account migration [UNHARDENED]
+
+**Goal**: move the live void-workstation herdr (release `20260906`, herdr
+0.8.0, server pid at plan time 4222, 11 workspaces, 15 Claude panes: 14
+`claude-kee`, 1 plain `claude`) to the fork build `e897ed0e` (0.9.3, staged at
+`~/.local/share/herdr/staged/herdr-e897ed0e`) so that every Claude pane comes
+back in its own account, with `--dangerously-skip-permissions` exactly when it
+was launched with it, and the same conversation. Intent: research/intent.md
+"Claude accounts, herdr agent variants, live deployment".
+
+**Already in place (verified 2026-10-07, not part of this phase)**
+- Shared session store: `~/.claude/{projects,file-history,session-env,tasks,
+  todos,plans,paste-cache}` are symlinks into `~/.claude-keemakr/`; logins are
+  per dir. Script + backup in `~/.local/share/claude-accounts/`.
+- fish: `conf.d/claude-accounts.fish` defines only `claude-kee`/`claude-me`.
+- Fork features: Phase 9 modes (e2e 47/47), Phase 10 variants (e2e 44/44),
+  migration rehearsal on a fake-id copy of the live snapshot (20/20).
+
+**Constraints**
+- C1. 0.8.0 predates the client endpoint generation (`207be3c7`, 2026-09-01),
+  so live handoff does not apply; the upgrade is stop -> start, which ends every
+  pane process. Restore then relaunches agents from the snapshot.
+- C2. The old server never recorded variants or launch flags; its snapshot has
+  `agent_session` per pane but no `agent_resume`. Without migration every
+  Claude pane restores as `claude --resume <id>` (personal account, no flag).
+- C3. The operator (this Claude session) runs inside pane `wY:p1`; anything it
+  starts in its pane dies with the server unless it leaves the pane's session.
+- C4. The release dir also carries helix (`bin/hx`, `runtime/`, 2.3 GB);
+  `promote.sh` hardcodes `20260906`.
+- C5. Nested `claude` runs started inside a Claude pane inherit
+  `HERDR_PANE_ID`, and their SessionStart hook overwrites that pane's session
+  record (happened during testing; corrected by re-reporting `wY:p1`).
+
+**Implement (one detached script, `~/.local/share/claude-accounts/deploy-herdr.sh`)**
+1. Preconditions, abort on any failure: staged binary runs `--version`;
+   `herdr config check` passes for the rendered new config
+   (`herdr.config.toml` with `@DEFAULT_SHELL@` -> `/usr/bin/fish`) using the new
+   binary via `HERDR_CONFIG_PATH`; `~/.local/bin/claude` resolves; every live
+   Claude pane's registry session id equals the server's `agent_session`
+   (`herdr pane get`), else stop and report.
+2. Stage release `releases/20261007`: copy `releases/20260906` with hardlinks
+   (`cp -al`), replace `bin/herdr` with the staged binary (new inode, so the old
+   release is untouched).
+3. Capture: `migrate-herdr-resume.py capture` with `HERDR_CONFIG_PATH` pointing
+   at the rendered NEW config (the live one has no `[session]`), output kept in
+   `~/.local/share/claude-accounts/deploy-<ts>/`.
+4. Back up `~/.config/herdr/{config.toml,session.json}` into the same dir.
+5. `herdr server stop` (old binary); wait until pid 4222 is gone and
+   `session.json` stops changing.
+6. `migrate-herdr-resume.py apply` on `~/.config/herdr/session.json`; abort
+   (and restore the backup) if any captured session is unmatched.
+7. Install the rendered new config to `~/.config/herdr/config.toml`.
+8. Promote: generalized promote (release name as argument) switching
+   `current` -> `releases/20261007`.
+9. Start the new server detached (`setsid -f herdr server`), verify
+   `herdr status`, workspace count = 11, and that 15 Claude processes appear
+   with the expected `CLAUDE_CONFIG_DIR` and argv (`/proc`), then exit. The
+   owner reattaches with `herdr`.
+10. Regenerate fish completions (`herdr completion fish`).
+The operator launches the script with `setsid -f` and output to a log, so it
+survives step 5 (C3), then waits on the log.
+
+**Rollback**: switch `current` back to `releases/20260906`, restore the backed
+up `config.toml` and pre-migration `session.json`, start the old server.
+
+**Verify (gates)**
+- [ ] G1 dry run: steps 1-4 with stop/apply/promote/start skipped; capture lists
+      15 panes and all match the snapshot.
+- [ ] G2 detachment: a `setsid -f` process started from a pane of an isolated
+      herdr survives `herdr server stop` of that isolated server.
+- [ ] G3 rollback rehearsal on an isolated copy: new server writes its snapshot,
+      old 0.8.0 binary can (or cannot) read it - recorded, and rollback uses the
+      pre-migration backup either way.
+- [ ] G4 live: after deploy, 15 Claude processes with correct config dir and
+      flags; this session resumed in `wY:p1`; sidebar labels show variants.
+
 ## 5. Decisions log / open questions
 
 - Mode name: `Control` (alternatives considered: `Manage`, `Tab` (too narrow),
