@@ -8,3 +8,28 @@
 16:26:45Z wY:p1 (implementer) done (turn=adversary, no action)
 16:26:45Z wY:p4 (adversary) working (round 1, turn=adversary)
 16:28:15Z wY:p4 (adversary) working (round 2, turn=adversary)
+16:29:25Z adversary: pid 23037 gone (death poll) - checking now
+16:29:25Z manifest status=converged (terminal) - watchdog done. unsticks=0
+16:29:25Z final state:
+  imp_pane=wY:p1
+  adv_pane=wY:p4
+  implementer_pane_arg=wY:p1
+  adversary_pane_arg=wY:p4
+  pid_implementer=9008
+  pid_adversary=23037
+  unread_manifest=0
+  files_seen=4
+  tsha_seen=fac8aef38bab40de4a7819fb41e886af32542aec788ef71fae06d33671edf812
+  unread_implementer=0
+  scr_implementer=3323814548
+  rev_implementer=1413
+  samehash_implementer=0
+  progress_at_implementer=1791390495
+  unknown_implementer=0
+  unread_adversary=0
+  scr_adversary=1085398665
+  rev_adversary=872
+  samehash_adversary=0
+  progress_at_adversary=1791390495
+  unknown_adversary=0
+  poll_fired_adversary=1791390565
