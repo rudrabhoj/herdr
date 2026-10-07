@@ -96,8 +96,8 @@ prompt_new_tab_name = false
 delivery = "system"
 
 [session]
-# Keep the permission bypass when herdr restores a Claude pane.
-resume_keep_args = { claude = ["--dangerously-skip-permissions"] }
+# Keep the permission bypass (either form) when herdr restores a Claude pane.
+resume_keep_args = { claude = ["--dangerously-skip-permissions", "--permission-mode="] }
 
 # Claude accounts (fish functions in conf.d/claude-accounts.fish). herdr reads
 # CLAUDE_CONFIG_DIR from the running claude, shows the matching name, and
