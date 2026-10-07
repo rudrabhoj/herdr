@@ -348,7 +348,11 @@ main() {
     cp "$RUN/config.toml" "$HERDR_CFG/config.toml"
     promote "$NEW_REL"; LOCKED=0
     : >"$RUN/dropped"
-    for entry in $(python3 -c 'import json,sys;[print(f"{p}={e[\"pids\"][0]}") for p,e in json.load(open(sys.argv[1])).get("codex",{}).items()]' "$RUN/capture.json"); do
+    # Assigned first: a failure inside `for x in $(...)` is silently an empty
+    # loop, which is how this guard once skipped itself on a syntax error.
+    local codex_pids
+    codex_pids=$(python3 -c 'import json,sys;[print(p + "=" + str(e["pids"][0])) for p,e in json.load(open(sys.argv[1])).get("codex",{}).items()]' "$RUN/capture.json")
+    for entry in $codex_pids; do
         if ! wait_gone 20 "${entry#*=}"; then
             drop_codex_pane "${entry%%=*}"
             echo "${entry%%=*}" >>"$RUN/dropped"

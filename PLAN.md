@@ -1561,6 +1561,22 @@ Findings:
   login could not refresh, so there was no second account to switch to. The
   bun test still covers it.
 
+### Live deploy record (2026-10-07 17:41)
+
+The owner ran dry-run and deploy (`deploy-20261007T174148`). Release
+`20261007` (`fbd57906`) is current, and server pid 14229 runs it. Capture got
+15/15 Claude panes and 1 codex pane. VERIFY was ok for all 16, each with its
+variant and kept flags. Labels show `claude-kee · rudrabhoj@gmail.com`,
+`claude · ashima@rudrabhoj.com` (wY:p2) and `codex · rudrabhoj@gmail.com`.
+The restored codex opened on its conversation with no hooks dialog.
+
+One defect: the codex old-pid guard (`deploy-herdr.sh`, wait for the old
+codex to exit before restore) died on a quoting error inside a `for x in
+$(...)` list. A failed substitution there is an empty loop, so the guard was
+skipped silently. It was harmless this run: the old codex (13982) had already
+exited and only the restored one (19713) holds the thread. Fixed by assigning
+the list first, so `set -e` aborts and the EXIT trap rolls back.
+
 ## 5. Decisions log / open questions
 
 - Mode name: `Control` (alternatives considered: `Manage`, `Tab` (too narrow),
