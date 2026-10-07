@@ -25,7 +25,7 @@
   "judge": "inherited"
  },
  "status": "open",
- "round": 0,
+ "round": 1,
  "cap": 3,
  "resumable": true,
  "cap_note": "owner: do not over-waste tokens - cap 3",
@@ -36,6 +36,7 @@
   "reference_index": "/home/rudrabhoj/.claude-keemakr/skills/long-yolo-harden-plan/references/reference-plan-index.md"
  },
  "target_sha_at_round": {
-  "0": "5dc4d76f5f20b78b6dbd23bd174e24d51a7843fb59d5616dde7b97e3b2f3828b"
+  "0": "5dc4d76f5f20b78b6dbd23bd174e24d51a7843fb59d5616dde7b97e3b2f3828b",
+  "1": "535652d61cb7c211d35fb1b88d2a55191e09d1492d3dc9a0d3827c5a7fa5e367"
  }
 }
