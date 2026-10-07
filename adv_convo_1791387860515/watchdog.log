@@ -12,3 +12,6 @@
 15:57:50Z wY:p3 (adversary) working (round 2, turn=implementer)
 15:59:21Z wY:p1 (implementer) done (turn=adversary, no action)
 15:59:21Z wY:p3 (adversary) working (round 2, turn=adversary)
+16:00:51Z wY:p1 (implementer) working (round 3, turn=adversary)
+16:00:51Z wY:p3 (adversary) working (round 3, turn=adversary)
+16:02:22Z wY:p1 (implementer) done (turn=adversary, no action)

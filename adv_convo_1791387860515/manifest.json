@@ -24,8 +24,8 @@
   "adversary": "explicit",
   "judge": "inherited"
  },
- "status": "open",
- "round": 3,
+ "status": "converged",
+ "round": 4,
  "cap": 6,
  "resumable": true,
  "cap_note": "owner: 'make sure we do not waste huge tokens in testing' - cap lowered from 12 to 6",
@@ -39,6 +39,8 @@
   "0": "f3b9d522bed72cd5c117de0fbe7aeaa8146a2096a43cc33d88167e0709fc4b46",
   "1": "2c6cfc129098960a35918089f7a35ffa83f6aa89bbb77b6aec9d81dd7c721fe9",
   "2": "b8c16ff8305151069a0e8650d0991320ebae1534f6f2c884be3d9b3dfe257973",
-  "3": "773d2f3af5258339df4b2ad60b75637ef7009c9895f2ed7e6e7c31ba8b12d89f"
- }
+  "3": "dd621f3930ec610ec3c78318a53b14e2c0e3393fa79435e76002ccd6b163e25a"
+ },
+ "converged_sha": "dd621f3930ec610ec3c78318a53b14e2c0e3393fa79435e76002ccd6b163e25a",
+ "converged_at_sha": "dd621f3930ec610ec3c78318a53b14e2c0e3393fa79435e76002ccd6b163e25a"
 }
