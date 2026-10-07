@@ -1472,6 +1472,29 @@ account-switching pi extensions are honored. pi side documented in
   were killed. The harness now prepends the stand-ins and aborts unless fish
   resolves all three to them.
 
+### Phase 13 - Deploy readiness review [UNHARDENED]
+
+**Claim under review**: Phases 10-12 as BUILT (`fb11df79` code, `3f348547`
+tooling) are ready for the live deploy, and the tests listed in the Phase 12
+implementation record cover what the live deploy depends on.
+
+**Built artifacts**: `src/agent_resume.rs`, `src/agent_account.rs`,
+`src/app/api/panes.rs` (resolver, account watch, once-per-session),
+`src/app/api.rs` (detection hook), `src/persist/restore.rs` (session dedupe),
+`src/server/headless.rs` + `src/app/runtime.rs` (account poll deadline),
+`src/integration/assets/pi/herdr-agent-state.ts`, `herdr.config.toml`,
+`fork/deploy/*`, `fork/tests/*`, `~/.pi/agent/docs/herdr.md`.
+
+**Claimed coverage**: see "Phase 12 implementation record". G1 dry-run on the
+live roots passed (15 Claude panes + 1 codex captured, nothing stopped).
+
+**Known untested (claimed acceptable)**: real codex and real pi end to end
+(credential risk, D1); macOS; `herdr --remote`; the live deploy itself (G4,
+G12.5); account polling cost with many panes (5 s, one stat per watched file).
+
+**Decision asked of the review**: which untested angle, if any, must be
+tested before the live deploy, and how, at low token cost.
+
 ## 5. Decisions log / open questions
 
 - Mode name: `Control` (alternatives considered: `Manage`, `Tab` (too narrow),
