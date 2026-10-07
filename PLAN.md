@@ -1080,8 +1080,9 @@ No API or wire change; restore already prefers reported resume commands.
 ### Phase 11 - Live deployment and account migration [HARDENED 2026-10-07, adv_convo_1791387860515]
 
 **Goal**: move the live void-workstation herdr (release `20260906`, herdr
-0.8.0) to the fork build `e897ed0e` (0.9.3, staged at
-`~/.local/share/herdr/staged/herdr-e897ed0e`) so that every Claude pane comes
+0.8.0) to the fork build `fb11df79` (0.9.3, staged at
+`~/.local/share/herdr/staged/herdr-fb11df79`; Phase 12 replaced the
+original `e897ed0e`) so that every Claude pane comes
 back in its own account, with its permission bypass exactly when it had one
 (either `--dangerously-skip-permissions` or `--permission-mode
 bypassPermissions`), and the same conversation. Intent: research/intent.md
@@ -1433,6 +1434,43 @@ codex-pid poll, start); owner trusts hooks in `wS:pW`; G12.5.
 **Residual register (accepted)**: as listed above, plus hook trust may be asked
 again when a reinstall changes the hook config; whether codex fires SessionStart
 before the first turn is unverified (no gate depends on it).
+
+### Phase 12 implementation record (2026-10-07)
+
+Code (`fb11df79`): 1(a) kept flags after a leading subcommand; 1(b) a resume
+tied to a known session dedupes on it; 1(c) a session first established by a
+state report is resolved once; 1(d) the pi asset reports `resume_argv` from
+`process.argv` (allowlist `--model`/`--thinking`/`--provider`/`--approve`).
+Owner additions the same day: the agents area shows the logged-in account
+(`ui.show_agent_account`): Claude from `<CLAUDE_CONFIG_DIR or ~>/.claude.json`,
+codex from the `id_token` email in `<CODEX_HOME or ~/.codex>/auth.json`, both
+polled every 5 s by mtime so a live login change updates the label; pi reports
+`pi · <email or provider>` itself through `getApiKeyForProvider`, so
+account-switching pi extensions are honored. pi side documented in
+`~/.pi/agent/docs/herdr.md`. Tooling and harnesses live in `fork/`.
+
+**Gate results**
+- [x] G12.1 unit: placement (claude/codex/pi), session dedupe for two
+      variants, account sources/readers/labels; bun suite 28/28 incl. pi
+      resume_argv and account switching. Once-per-session state-report
+      resolution is covered by code review and the stub e2e, not a unit test.
+- [x] G12.2 + accounts: `fork/tests/e2e_deploy.py` scenario A, 20 checks
+      (labels follow login changes for claude, codex, pi; exact restore argv
+      after restart for all three).
+- [x] G12.3 + Phase 11 G2/G3: scenarios B and C, 21 checks (deploy from the
+      operator's env with an injected codex install failure, every pane
+      verified, clean server env; rollback; injected apply failure rolls back
+      without leaving the lock; live herdr unchanged). 41/41 total.
+- [x] G12.4: `fork/tests/e2e_claude_angles.py` 5/6 automatic; the picker
+      check matched the wrong text (Claude hides `-p` sessions), the screen
+      showed the `claude-kee` session listed in `claude-me`'s picker; the
+      assertion is fixed.
+- [ ] G1 dry-run on the live roots; G4/G12.5 after the live deploy.
+- Incident during G12.2 (first attempt): the owner's fish_user_paths put the
+  real `claude` and `pi` ahead of the stand-ins inside the isolated root; they
+  started with empty isolated config dirs (no credentials, no model call) and
+  were killed. The harness now prepends the stand-ins and aborts unless fish
+  resolves all three to them.
 
 ## 5. Decisions log / open questions
 

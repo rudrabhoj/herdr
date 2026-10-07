@@ -114,3 +114,13 @@ near-verbatim). Tiers as above.
   model_reasoning_effort=high --search --dangerously-bypass-approvals-and-sandbox`).
 - DERIVED: the owner's ~/.pi/agent/extensions (15+ custom) and ~/.codex config
   must keep working after any herdr integration install.
+- RULED (2026-10-07): document any pi change in pi's own md docs; "do it all";
+  "Just make sure not to mess up our live herdr as a rule. No stopping until
+  all is done."
+- RULED (2026-10-07): show the account email in herdr's agents area, e.g.
+  claude-kee with its email, "beautiful and not ugly"; "same can be done for pi
+  and codex too"; "we can change live login it should properly update the
+  agents area thing too"; pi can switch accounts at runtime through extensions.
+- RULED (2026-10-07): document the changes in the fork's git history; run yolo
+  harden once done for missed angles; then deallocate every resource the work
+  and its tests created.
