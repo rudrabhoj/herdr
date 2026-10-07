@@ -1474,7 +1474,7 @@ account-switching pi extensions are honored. pi side documented in
   were killed. The harness now prepends the stand-ins and aborts unless fish
   resolves all three to them.
 
-### Phase 13 - Deploy readiness review [UNHARDENED]
+### Phase 13 - Deploy readiness review [HARDENED 2026-10-07, adv_convo_1791392697109]
 
 **Claim under review**: Phases 10-12 as BUILT (`fb11df79` code, `3f348547`
 tooling) are ready for the live deploy, and the tests listed in the Phase 12
@@ -1504,6 +1504,26 @@ server-start failures plus a deleted old cwd. F2 - covered (above). F3 - the
 account poll parsed one shared file once per pane; now once per file per
 poll. Run `dry-run` again immediately before `deploy` in the same sitting:
 capture's strictness decides whether `herdr` gets locked.
+
+**Readiness record (adv_convo_1791392697109; claude/claude-opus-5-5/high as
+claude-kee; converged round 2, both judges agree)**: round 1 F1 BLOCKER
+(rollback trap), F2/F3 MINOR, all fixed and rehearsed (A 20/20, B+C 48/48 on
+`fbd57906`); round 2 CONVERGED.
+
+**Accepted live order**: (1) review closed; (2) remove the stale staging
+`releases/20261007` (staged by the 17:04 dry-run with `fb11df79`) or pass a
+new `NEW_REL`; (3) `NEW_BIN=~/.local/share/herdr/staged/herdr-fbd57906
+fork/deploy/deploy-herdr.sh dry-run`; (4) `deploy` detached in the same
+sitting, followed from an ssh shell; (5) after DONE reattach, trust the codex
+hooks once, read VERIFY/REPORT, `rollback` by hand if anything is wrong.
+
+**Residual register (accepted)**: SIGKILL/untrapped SIGTERM of the deploy
+skips the EXIT trap (run `rollback <run dir>` by hand); a refusing rollback
+ends on its own FAIL line; real codex/pi end to end untested (the restored
+codex waits at the hook-trust dialog); a stale variant label can show
+briefly between an agent relaunch and its SessionStart; pi refreshes its
+label on session start, model select and each turn; the Claude hook stays v7
+until reinstalled after the deploy.
 
 ## 5. Decisions log / open questions
 

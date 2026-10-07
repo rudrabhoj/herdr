@@ -5,23 +5,23 @@ adversary_pane_arg=wY:p5
 pid_implementer=9008
 pid_adversary=32403
 nudged_key=1-implementer
-progress_at_adversary=1791393390
 files_at_nudge=1
 silent_nudges=0
 since_nudge=1
-last_implementer=wY:p1 (implementer) working (round 1, turn=implementer)
 unread_manifest=0
-files_seen=1
+files_seen=2
 tsha_seen=535652d61cb7c211d35fb1b88d2a55191e09d1492d3dc9a0d3827c5a7fa5e367
 unread_implementer=0
-scr_implementer=3422325839
-rev_implementer=1792
+scr_implementer=3968416075
+rev_implementer=1793
 samehash_implementer=0
-progress_at_implementer=1791393754
+progress_at_implementer=1791393844
 unknown_implementer=0
+last_implementer=wY:p1 (implementer) done (turn=adversary, no action)
 unread_adversary=0
-scr_adversary=2601894175
-rev_adversary=499
-samehash_adversary=6
+scr_adversary=825671647
+rev_adversary=540
+samehash_adversary=0
+progress_at_adversary=1791393844
 unknown_adversary=0
-last_adversary=wY:p5 (adversary) idle (turn=implementer, no action)
+last_adversary=wY:p5 (adversary) working (round 1, turn=adversary)

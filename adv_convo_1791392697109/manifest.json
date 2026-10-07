@@ -24,8 +24,8 @@
   "adversary": "explicit",
   "judge": "inherited"
  },
- "status": "open",
- "round": 1,
+ "status": "converged",
+ "round": 2,
  "cap": 3,
  "resumable": true,
  "cap_note": "owner: do not over-waste tokens - cap 3",
@@ -38,5 +38,7 @@
  "target_sha_at_round": {
   "0": "5dc4d76f5f20b78b6dbd23bd174e24d51a7843fb59d5616dde7b97e3b2f3828b",
   "1": "535652d61cb7c211d35fb1b88d2a55191e09d1492d3dc9a0d3827c5a7fa5e367"
- }
+ },
+ "converged_sha": "535652d61cb7c211d35fb1b88d2a55191e09d1492d3dc9a0d3827c5a7fa5e367",
+ "converged_at_sha": "535652d61cb7c211d35fb1b88d2a55191e09d1492d3dc9a0d3827c5a7fa5e367"
 }
