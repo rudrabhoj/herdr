@@ -1125,17 +1125,29 @@ are never hard-coded: every expectation is derived from the capture (A6).
 
 **Implement (`~/.local/share/claude-accounts/deploy-herdr.sh`, subcommands
 `dry-run`, `deploy`, `rollback`; every herdr call by absolute path)**
+Every root the script touches is a variable whose default is the live value
+(B2): `BIN_DIR` (`~/.local/bin`), `VW_BASE` (`~/.local/share/void-workstation`),
+`HERDR_CFG` (`~/.config/herdr`, socket `$HERDR_CFG/herdr.sock`), `WORK`
+(`~/.local/share/claude-accounts`). The script never derives a path from
+`HERDR_SOCKET_PATH` or any inherited `HERDR_*`. `relink()` re-creates
+`$BIN_DIR/herdr -> $VW_BASE/current/bin/herdr` atomically (`ln -s` + `mv -T`)
+whatever is there; the lock stub carries the marker line
+`# herdr-deploy-lock`, and the generalized promote replaces a file with that
+marker without archiving it (B1).
 Before anything stops:
 1. Stage release `releases/20261007`: `cp -al releases/20260906`, then
    install the staged binary as a new inode at `bin/herdr` (the old release is
    untouched). Render the new config (template, `@DEFAULT_SHELL@` ->
    `/usr/bin/fish`) to the deploy dir.
-2. Preconditions, abort with nothing stopped: new binary `--version` = 0.9.3;
+2. Preconditions, abort with nothing stopped (every abort before step 6 runs
+   `relink()` and exits; B1): new binary `--version` = 0.9.3;
    `herdr config check` of the rendered config via `HERDR_CONFIG_PATH` with
    the new binary; `~/.local/bin/claude` resolves; old server pid = the
    process listening on `~/.config/herdr/herdr.sock`; for every live Claude
    pane the registry session id equals the server's `agent_session`
-   (`herdr pane get`). Then the adversary pane of this review is closed.
+   (`herdr pane get`). This review's manifest is terminal and its watchdog
+   has exited (no late nudge typed into a restored pane), then the adversary
+   pane of this review is closed.
 3. Save `/proc/<old server pid>/environ` (C6) and back up
    `~/.config/herdr/config.toml`.
 4. Lock: replace `~/.local/bin/herdr` with a stub that prints "herdr upgrade
@@ -1170,7 +1182,11 @@ The operator launches `deploy` with `setsid -f`, output to
 `~/.local/share/claude-accounts/deploy-<ts>/log`, so it survives step 6 (C3).
 
 **Rollback (`deploy-herdr.sh rollback`, automatic after step 6, or by hand)**
-Switch `current` back to `releases/20260906` (restores `~/.local/bin/herdr`),
+First establish that no herdr server is alive (B3): the old pid gone and
+nothing listening on `$HERDR_CFG/herdr.sock`; a stray server is stopped with
+its own binary (`/proc/<pid>/exe`), and if one still listens rollback refuses
+and prints why. Then switch `current` back to `releases/20260906` and run
+`relink()` (the stub may still be there when rollback fires before step 8; B1),
 restore the backed-up `config.toml` with `[session] resume_agents_on_restore =
 false` added, restore `session.final.json` (the old server's own last save),
 start 0.8.0 detached with the saved environment, and print every captured
@@ -1186,9 +1202,19 @@ the owner restores accounts and bypass by hand; 0.8.0 cannot do it (C2).
       isolated 0.8.0 server survived that server's `server stop`. Repeat with
       the launch shape the operator uses (a non-interactive child of a Claude
       Bash tool) before deploy.
-- [ ] G3 rollback rehearsal: on an isolated copy (fake session ids, every
-      `HERDR_*` unset), run `deploy` then `rollback`; 0.8.0 is serving the
-      restored layout, no agent auto-resumed, manual commands printed.
+- [ ] G3 rollback rehearsal (B2): all four roots under `/tmp/claude-1000/a<short>`
+      (a copy of the release with hardlinks, a copy of the live config and a
+      fake-id copy of the snapshot); the isolated old server is started with
+      a copy of the live server's environ (XDG redirected); the script runs
+      from the operator's own env (real `CLAUDE_*` present, only `HERDR_*`
+      unset). Asserts: (a) `deploy` - the new server's environ and a fresh
+      shell pane have no `CLAUDE_CONFIG_DIR` and no foreign `HERDR_PANE_ID`;
+      (b) `rollback` after `deploy` - 0.8.0 serving, no agent auto-resumed,
+      manual commands printed; (c) a failure injected at step 7 with the stub
+      in place - `readlink $BIN_DIR/herdr` is the release symlink and
+      `$BIN_DIR/herdr --version` prints 0.8.0; (d) the live
+      `readlink ~/.local/bin/herdr`, `readlink current` and live server pid
+      are identical before and after G3.
 - [ ] G4 live: step 10's report is clean; this session resumed in `wY:p1`;
       sidebar labels show variants.
 

@@ -5,3 +5,8 @@
 15:48:46Z wY:p1 (implementer) idle (turn=adversary, no action)
 15:53:17Z wY:p1 (implementer) working (round 1, turn=implementer)
 15:53:17Z wY:p3 (adversary) working (round 1, turn=implementer)
+15:56:18Z wY:p1 (implementer) idle (turn=adversary, no action)
+15:56:18Z wY:p3 (adversary) working (round 1, turn=adversary)
+15:57:50Z wY:p1: nudge text still in the composer after enter - sent enter again
+15:57:50Z nudged wY:p1 (implementer) for round 2 (turn=implementer, owes a reply to adv_message_2.md; silent nudges so far: 0)
+15:57:50Z wY:p3 (adversary) working (round 2, turn=implementer)
