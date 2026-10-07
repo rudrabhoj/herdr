@@ -153,6 +153,22 @@ impl ClientShellState {
                     outcome.repaint = true;
                     return;
                 }
+                if let Some(scope) = super::control::control_scope_for_entry(action) {
+                    if self.mobile_layout_active() {
+                        // Mobile has no bar row for a desktop-style mode; the
+                        // switcher panel is the equivalent affordance.
+                        self.record_binding(
+                            crate::input::KeybindMatch::Action(
+                                crate::input::KeybindAction::WorkspacePicker,
+                            ),
+                            outcome,
+                        );
+                    } else {
+                        self.mode = ClientShellMode::Control(scope);
+                        outcome.repaint = true;
+                    }
+                    return;
+                }
                 if action == crate::input::KeybindAction::CopyMode {
                     if self.enter_copy_mode(outcome) {
                         outcome.repaint = true;
@@ -1002,6 +1018,48 @@ impl ClientShellState {
                     tab_id: focused_tab,
                     insert_index,
                 }))
+            }
+            // Unlike MoveTabPrevious/Next these stop at the edges, matching drag
+            // reordering. tab.move takes a gap index, so one step right inserts
+            // at source + 2.
+            KeybindAction::MoveTabLeft | KeybindAction::MoveTabRight => {
+                let tabs = snapshot
+                    .tabs
+                    .iter()
+                    .filter(|tab| tab.workspace_id == focused_workspace)
+                    .collect::<Vec<_>>();
+                let focused_tab = focused_tab?;
+                let source = tabs.iter().position(|tab| tab.tab_id == focused_tab)?;
+                let insert_index = if action == KeybindAction::MoveTabLeft {
+                    source.checked_sub(1)?
+                } else {
+                    Some(source + 2).filter(|insert| *insert <= tabs.len())?
+                };
+                Some(Method::TabMove(TabMoveParams {
+                    tab_id: focused_tab,
+                    insert_index,
+                }))
+            }
+            // Steps over sidebar root entries so a worktree group is cleared in
+            // one move, and reuses the drag path to move groups as a block.
+            KeybindAction::MoveWorkspaceUp | KeybindAction::MoveWorkspaceDown => {
+                let roots = render::workspace_entries(snapshot, &HashSet::new())
+                    .into_iter()
+                    .filter(|entry| !entry.indented)
+                    .filter_map(|entry| snapshot.workspaces.get(entry.index))
+                    .map(|workspace| workspace.workspace_id.clone())
+                    .collect::<Vec<_>>();
+                let position = roots
+                    .iter()
+                    .position(|workspace_id| *workspace_id == focused_workspace)?;
+                let before = if action == KeybindAction::MoveWorkspaceUp {
+                    Some(roots.get(position.checked_sub(1)?)?.clone())
+                } else if position + 1 >= roots.len() {
+                    return None;
+                } else {
+                    roots.get(position + 2).cloned()
+                };
+                self.workspace_move_method(&focused_workspace, before.as_deref())
             }
             KeybindAction::NewTab if !self.config.prompt_new_tab_name => {
                 Some(Method::TabCreate(TabCreateParams {

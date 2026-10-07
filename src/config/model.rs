@@ -369,6 +369,42 @@ pub struct KeysConfig {
     pub navigate_pane_up: BindingConfig,
     /// Focus the pane to the right in navigate mode. Default: "l". Right arrow is always an alias.
     pub navigate_pane_right: BindingConfig,
+    /// Enter tab mode (sticky tab management). Default: "prefix+t".
+    pub tab_mode: BindingConfig,
+    /// Enter space mode (sticky workspace management). Default: "prefix+shift+s".
+    pub space_mode: BindingConfig,
+    /// Enter agent mode (sticky agent navigation). Default: "prefix+a".
+    pub agent_mode: BindingConfig,
+    /// Enter pane mode (sticky pane management). Default: "prefix+f".
+    pub pane_mode: BindingConfig,
+    /// Mode key: create in the active scope (tabs/spaces; auto-directional split in panes). Default: "n".
+    pub control_new: BindingConfig,
+    /// Mode key: rename in the active scope (tabs/spaces/panes). Default: "r".
+    pub control_rename: BindingConfig,
+    /// Mode key: close in the active scope (tabs/spaces/panes). Default: "x".
+    pub control_close: BindingConfig,
+    /// Mode key: previous tab (tabs scope) or focus pane left (panes scope). Default: "h".
+    pub control_previous: BindingConfig,
+    /// Mode key: next tab (tabs scope) or focus pane right (panes scope). Default: "l".
+    pub control_next: BindingConfig,
+    /// Mode key: up the vertical list (spaces/agents) or focus pane up (panes). Default: "k".
+    pub control_up: BindingConfig,
+    /// Mode key: down the vertical list (spaces/agents) or focus pane down (panes). Default: "j".
+    pub control_down: BindingConfig,
+    /// Mode key: move the item back (tab left / workspace up / swap pane left). Default: "i".
+    pub control_move_back: BindingConfig,
+    /// Mode key: move the item forward (tab right / workspace down / swap pane right). Default: "o".
+    pub control_move_forward: BindingConfig,
+    /// Pane mode key: zoom the focused pane. Default: "z".
+    pub control_zoom: BindingConfig,
+    /// Tab/space/agent mode key: switch to the tabs scope. Default: "t".
+    pub control_scope_tabs: BindingConfig,
+    /// Tab/space/agent mode key: switch to the spaces scope. Default: "s".
+    pub control_scope_spaces: BindingConfig,
+    /// Tab/space/agent mode key: switch to the agents scope. Default: "a".
+    pub control_scope_agents: BindingConfig,
+    /// Tab/space/agent mode key: switch to the panes scope. Default: "p".
+    pub control_scope_panes: BindingConfig,
     /// Detach the current client from its Herdr server. Default: "prefix+q".
     pub detach: BindingConfig,
     /// Reload config.toml in the running app/server. Default: "prefix+shift+r".
@@ -383,6 +419,10 @@ pub struct KeysConfig {
     pub previous_agent: BindingConfig,
     /// Focus the next agent shown in the agent panel. Unset by default.
     pub next_agent: BindingConfig,
+    /// Move the selected workspace up one sidebar position. Unset by default.
+    pub move_workspace_up: BindingConfig,
+    /// Move the selected workspace down one sidebar position. Unset by default.
+    pub move_workspace_down: BindingConfig,
     /// Focus an agent by index 1-9. Unset by default.
     pub focus_agent: BindingConfig,
     /// Local-client shortcut that sends a clipboard image to a remote Herdr session. Default: "ctrl+v".
@@ -399,6 +439,10 @@ pub struct KeysConfig {
     pub move_tab_previous: BindingConfig,
     /// Move the active tab one position toward the back. Unset by default.
     pub move_tab_next: BindingConfig,
+    /// Move the focused tab one position left. Unset by default.
+    pub move_tab_left: BindingConfig,
+    /// Move the focused tab one position right. Unset by default.
+    pub move_tab_right: BindingConfig,
     /// Switch to tab 1-9. Default: "prefix+1..9".
     pub switch_tab: BindingConfig,
     /// Switch to workspace 1-9 from prefix mode. Unset by default.
@@ -507,6 +551,42 @@ pub(crate) struct KeysConfigOverlay {
     #[serde(skip_serializing_if = "Option::is_none")]
     navigate_pane_right: Option<BindingConfig>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    tab_mode: Option<BindingConfig>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    space_mode: Option<BindingConfig>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    agent_mode: Option<BindingConfig>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pane_mode: Option<BindingConfig>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    control_new: Option<BindingConfig>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    control_rename: Option<BindingConfig>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    control_close: Option<BindingConfig>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    control_previous: Option<BindingConfig>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    control_next: Option<BindingConfig>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    control_up: Option<BindingConfig>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    control_down: Option<BindingConfig>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    control_move_back: Option<BindingConfig>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    control_move_forward: Option<BindingConfig>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    control_zoom: Option<BindingConfig>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    control_scope_tabs: Option<BindingConfig>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    control_scope_spaces: Option<BindingConfig>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    control_scope_agents: Option<BindingConfig>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    control_scope_panes: Option<BindingConfig>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     detach: Option<BindingConfig>,
     #[serde(skip_serializing_if = "Option::is_none")]
     reload_config: Option<BindingConfig>,
@@ -520,6 +600,10 @@ pub(crate) struct KeysConfigOverlay {
     previous_agent: Option<BindingConfig>,
     #[serde(skip_serializing_if = "Option::is_none")]
     next_agent: Option<BindingConfig>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    move_workspace_up: Option<BindingConfig>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    move_workspace_down: Option<BindingConfig>,
     #[serde(skip_serializing_if = "Option::is_none")]
     focus_agent: Option<BindingConfig>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -536,6 +620,9 @@ pub(crate) struct KeysConfigOverlay {
     move_tab_previous: Option<BindingConfig>,
     #[serde(skip_serializing_if = "Option::is_none")]
     move_tab_next: Option<BindingConfig>,
+    move_tab_left: Option<BindingConfig>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    move_tab_right: Option<BindingConfig>,
     #[serde(skip_serializing_if = "Option::is_none")]
     switch_tab: Option<BindingConfig>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -660,6 +747,24 @@ impl<'de> Deserialize<'de> for KeysConfig {
         apply_field!(navigate_pane_down);
         apply_field!(navigate_pane_up);
         apply_field!(navigate_pane_right);
+        apply_field!(tab_mode);
+        apply_field!(space_mode);
+        apply_field!(agent_mode);
+        apply_field!(pane_mode);
+        apply_field!(control_new);
+        apply_field!(control_rename);
+        apply_field!(control_close);
+        apply_field!(control_previous);
+        apply_field!(control_next);
+        apply_field!(control_up);
+        apply_field!(control_down);
+        apply_field!(control_move_back);
+        apply_field!(control_move_forward);
+        apply_field!(control_zoom);
+        apply_field!(control_scope_tabs);
+        apply_field!(control_scope_spaces);
+        apply_field!(control_scope_agents);
+        apply_field!(control_scope_panes);
         apply_field!(detach);
         apply_field!(reload_config);
         apply_field!(open_notification_target);
@@ -667,6 +772,8 @@ impl<'de> Deserialize<'de> for KeysConfig {
         apply_field!(next_workspace);
         apply_field!(previous_agent);
         apply_field!(next_agent);
+        apply_field!(move_workspace_up);
+        apply_field!(move_workspace_down);
         apply_field!(focus_agent);
         apply_field!(remote_image_paste);
         apply_field!(new_tab);
@@ -675,6 +782,8 @@ impl<'de> Deserialize<'de> for KeysConfig {
         apply_field!(next_tab);
         apply_field!(move_tab_previous);
         apply_field!(move_tab_next);
+        apply_field!(move_tab_left);
+        apply_field!(move_tab_right);
         apply_field!(switch_tab);
         apply_field!(switch_workspace);
         apply_field!(close_tab);
@@ -765,6 +874,24 @@ impl KeysConfig {
         copy_effective_action_field!(navigate_pane_down, keybinds.navigate.pane_down);
         copy_effective_action_field!(navigate_pane_up, keybinds.navigate.pane_up);
         copy_effective_action_field!(navigate_pane_right, keybinds.navigate.pane_right);
+        copy_effective_action_field!(tab_mode, keybinds.tab_mode);
+        copy_effective_action_field!(space_mode, keybinds.space_mode);
+        copy_effective_action_field!(agent_mode, keybinds.agent_mode);
+        copy_effective_action_field!(pane_mode, keybinds.pane_mode);
+        copy_effective_action_field!(control_new, keybinds.control.new);
+        copy_effective_action_field!(control_rename, keybinds.control.rename);
+        copy_effective_action_field!(control_close, keybinds.control.close);
+        copy_effective_action_field!(control_previous, keybinds.control.previous);
+        copy_effective_action_field!(control_next, keybinds.control.next);
+        copy_effective_action_field!(control_up, keybinds.control.up);
+        copy_effective_action_field!(control_down, keybinds.control.down);
+        copy_effective_action_field!(control_move_back, keybinds.control.move_back);
+        copy_effective_action_field!(control_move_forward, keybinds.control.move_forward);
+        copy_effective_action_field!(control_zoom, keybinds.control.zoom);
+        copy_effective_action_field!(control_scope_tabs, keybinds.control.scope_tabs);
+        copy_effective_action_field!(control_scope_spaces, keybinds.control.scope_spaces);
+        copy_effective_action_field!(control_scope_agents, keybinds.control.scope_agents);
+        copy_effective_action_field!(control_scope_panes, keybinds.control.scope_panes);
         copy_effective_action_field!(detach, keybinds.detach);
         copy_effective_action_field!(reload_config, keybinds.reload_config);
         copy_effective_action_field!(open_notification_target, keybinds.open_notification_target);
@@ -772,6 +899,8 @@ impl KeysConfig {
         copy_effective_action_field!(next_workspace, keybinds.next_workspace);
         copy_effective_action_field!(previous_agent, keybinds.previous_agent);
         copy_effective_action_field!(next_agent, keybinds.next_agent);
+        copy_effective_action_field!(move_workspace_up, keybinds.move_workspace_up);
+        copy_effective_action_field!(move_workspace_down, keybinds.move_workspace_down);
         copy_effective_indexed_field!(focus_agent, keybinds.focus_agent);
         copy_user_field!(remote_image_paste);
         copy_effective_action_field!(new_tab, keybinds.new_tab);
@@ -780,6 +909,8 @@ impl KeysConfig {
         copy_effective_action_field!(next_tab, keybinds.next_tab);
         copy_effective_action_field!(move_tab_previous, keybinds.move_tab_previous);
         copy_effective_action_field!(move_tab_next, keybinds.move_tab_next);
+        copy_effective_action_field!(move_tab_left, keybinds.move_tab_left);
+        copy_effective_action_field!(move_tab_right, keybinds.move_tab_right);
         copy_effective_indexed_field!(switch_tab, keybinds.switch_tab);
         copy_effective_indexed_field!(switch_workspace, keybinds.switch_workspace);
         copy_effective_action_field!(close_tab, keybinds.close_tab);
@@ -1137,6 +1268,24 @@ impl Default for KeysConfig {
             navigate_pane_down: BindingConfig::one("j"),
             navigate_pane_up: BindingConfig::one("k"),
             navigate_pane_right: BindingConfig::one("l"),
+            tab_mode: BindingConfig::one("prefix+t"),
+            space_mode: BindingConfig::one("prefix+shift+s"),
+            agent_mode: BindingConfig::one("prefix+a"),
+            pane_mode: BindingConfig::one("prefix+f"),
+            control_new: BindingConfig::one("n"),
+            control_rename: BindingConfig::one("r"),
+            control_close: BindingConfig::one("x"),
+            control_previous: BindingConfig::one("h"),
+            control_next: BindingConfig::one("l"),
+            control_up: BindingConfig::one("k"),
+            control_down: BindingConfig::one("j"),
+            control_move_back: BindingConfig::one("i"),
+            control_move_forward: BindingConfig::one("o"),
+            control_zoom: BindingConfig::one("z"),
+            control_scope_tabs: BindingConfig::one("t"),
+            control_scope_spaces: BindingConfig::one("s"),
+            control_scope_agents: BindingConfig::one("a"),
+            control_scope_panes: BindingConfig::one("p"),
             detach: BindingConfig::one("prefix+q"),
             reload_config: BindingConfig::one("prefix+shift+r"),
             open_notification_target: BindingConfig::one("prefix+o"),
@@ -1144,6 +1293,8 @@ impl Default for KeysConfig {
             next_workspace: BindingConfig::empty(),
             previous_agent: BindingConfig::empty(),
             next_agent: BindingConfig::empty(),
+            move_workspace_up: BindingConfig::empty(),
+            move_workspace_down: BindingConfig::empty(),
             focus_agent: BindingConfig::empty(),
             remote_image_paste: "ctrl+v".into(),
             new_tab: BindingConfig::one("prefix+c"),
@@ -1152,6 +1303,8 @@ impl Default for KeysConfig {
             next_tab: BindingConfig::one("prefix+n"),
             move_tab_previous: BindingConfig::empty(),
             move_tab_next: BindingConfig::empty(),
+            move_tab_left: BindingConfig::empty(),
+            move_tab_right: BindingConfig::empty(),
             switch_tab: BindingConfig::one("prefix+1..9"),
             switch_workspace: BindingConfig::empty(),
             close_tab: BindingConfig::one("prefix+shift+x"),

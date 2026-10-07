@@ -115,6 +115,10 @@ pub(crate) fn keybind_help_groups(
                     "workspace navigation",
                 ),
                 entry(binding_label(&keybinds.goto), "session navigator"),
+                entry(binding_label(&keybinds.tab_mode), "tab mode"),
+                entry(binding_label(&keybinds.space_mode), "space mode"),
+                entry(binding_label(&keybinds.agent_mode), "agent mode"),
+                entry(binding_label(&keybinds.pane_mode), "pane mode"),
                 entry(binding_label(&keybinds.new_workspace), "new workspace"),
                 entry(binding_label(&keybinds.new_worktree), "new worktree"),
                 entry(binding_label(&keybinds.open_worktree), "open worktree"),
@@ -145,9 +149,29 @@ pub(crate) fn keybind_help_groups(
                 entry(binding_label(&keybinds.next_tab), "next tab"),
                 entry(binding_label(&keybinds.move_tab_previous), "move tab left"),
                 entry(binding_label(&keybinds.move_tab_next), "move tab right"),
+                entry(
+                    binding_label(&keybinds.move_tab_left),
+                    "move tab left (no wrap)",
+                ),
+                entry(
+                    binding_label(&keybinds.move_tab_right),
+                    "move tab right (no wrap)",
+                ),
                 entry(indexed_label(&keybinds.switch_tab), "switch tab 1-9"),
                 entry(binding_label(&keybinds.close_tab), "close tab"),
+                entry(
+                    binding_label(&keybinds.move_workspace_up),
+                    "move workspace up",
+                ),
+                entry(
+                    binding_label(&keybinds.move_workspace_down),
+                    "move workspace down",
+                ),
             ],
+        ),
+        (
+            "tab / space / agent / pane modes",
+            control_mode_entries(keybinds),
         ),
         (
             "panes",
@@ -217,6 +241,58 @@ pub(crate) fn keybind_help_groups(
     groups
 }
 
+fn control_mode_entries(keybinds: &Keybinds) -> Vec<KeybindHelpEntry> {
+    let control = &keybinds.control;
+    let pair = |a: &ActionKeybinds, b: &ActionKeybinds| {
+        format!("{} / {}", binding_label(a), binding_label(b))
+    };
+    vec![
+        entry("esc / enter", "exit tab/space/agent/pane mode"),
+        entry(
+            format!(
+                "{} / {} / {} / {}",
+                binding_label(&control.scope_tabs),
+                binding_label(&control.scope_spaces),
+                binding_label(&control.scope_agents),
+                binding_label(&control.scope_panes)
+            ),
+            "switch scope: tabs / spaces / agents / panes",
+        ),
+        entry(
+            pair(&control.previous, &control.next),
+            "previous / next tab (tabs)",
+        ),
+        entry(
+            pair(&control.up, &control.down),
+            "up / down (spaces, agents)",
+        ),
+        entry("1..9", "switch within scope"),
+        entry(
+            pair(&control.move_back, &control.move_forward),
+            "move item back / forward",
+        ),
+        entry(
+            binding_label(&control.new),
+            "new (tabs/spaces), split (panes)",
+        ),
+        entry(binding_label(&control.rename), "rename (tabs/spaces/panes)"),
+        entry(binding_label(&control.close), "close (tabs/spaces/panes)"),
+        entry("left / right", "previous / next tab"),
+        entry("up / down", "previous / next workspace"),
+        entry(
+            format!(
+                "{} / {} / {} / {}",
+                binding_label(&control.previous),
+                binding_label(&control.down),
+                binding_label(&control.up),
+                binding_label(&control.next)
+            ),
+            "focus pane (panes)",
+        ),
+        entry(binding_label(&control.zoom), "zoom pane (panes)"),
+    ]
+}
+
 pub(crate) fn filter_keybind_help_groups(
     groups: Vec<KeybindHelpGroup>,
     query: &str,
@@ -266,6 +342,39 @@ mod tests {
         assert_eq!(filtered.len(), 1);
         assert_eq!(filtered[0].1[0].1, "close pane");
         assert!(filter_keybind_help_groups(groups(), "panes").is_empty());
+    }
+
+    #[test]
+    fn scoped_mode_group_lists_live_entries_and_is_filterable() {
+        let groups = keybind_help_groups(&Keybinds::default(), &[]);
+        let (_, modes) = groups
+            .iter()
+            .find(|(title, _)| *title == "tab / space / agent / pane modes")
+            .expect("scoped modes group present");
+        assert!(modes
+            .iter()
+            .any(|(key, label)| key == "n" && label == "new (tabs/spaces), split (panes)"));
+
+        let (_, workspace_tab) = groups
+            .iter()
+            .find(|(title, _)| *title == "workspaces / tabs")
+            .expect("workspaces group");
+        for (key, label) in [
+            ("prefix+t", "tab mode"),
+            ("prefix+shift+s", "space mode"),
+            ("prefix+a", "agent mode"),
+            ("prefix+f", "pane mode"),
+        ] {
+            assert!(
+                workspace_tab.iter().any(|(k, l)| k == key && l == label),
+                "{label} entry with live label {key}"
+            );
+        }
+
+        let filtered = filter_keybind_help_groups(groups, "switch scope");
+        assert!(filtered
+            .iter()
+            .any(|(title, _)| *title == "tab / space / agent / pane modes"));
     }
 
     #[test]

@@ -226,6 +226,41 @@ command = "lazygit"
     }
 
     #[test]
+    fn local_keybindings_profile_round_trips_scoped_mode_and_reorder_fields() {
+        let config: Config = toml::from_str(
+            r#"
+[keys]
+tab_mode = "ctrl+t"
+pane_mode = "ctrl+p"
+control_down = "d"
+move_tab_left = "alt+i"
+move_workspace_down = "alt+shift+o"
+"#,
+        )
+        .unwrap();
+
+        let profile = config.local_keybindings_profile_toml().unwrap();
+        let keybinds = keybindings_from_profile_toml(&profile).unwrap().keybinds;
+        let labels = |bindings: &ActionKeybinds| {
+            bindings
+                .bindings
+                .iter()
+                .map(|binding| binding.label.clone())
+                .collect::<Vec<_>>()
+        };
+
+        assert_eq!(labels(&keybinds.tab_mode), ["ctrl+t"]);
+        assert_eq!(labels(&keybinds.pane_mode), ["ctrl+p"]);
+        assert_eq!(labels(&keybinds.control.down), ["d"]);
+        assert_eq!(labels(&keybinds.move_tab_left), ["alt+i"]);
+        assert_eq!(labels(&keybinds.move_workspace_down), ["alt+shift+o"]);
+        // Defaults survive the profile too, not only user-set fields.
+        assert_eq!(labels(&keybinds.space_mode), ["prefix+shift+s"]);
+        assert_eq!(labels(&keybinds.control.zoom), ["z"]);
+        assert_eq!(labels(&keybinds.control.scope_agents), ["a"]);
+    }
+
+    #[test]
     fn local_keybindings_profile_publishes_the_effective_prefix_fallback() {
         let config: Config = toml::from_str(
             r#"

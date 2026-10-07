@@ -713,6 +713,10 @@ impl ClientShellState {
                 self.route_resize_key(key, outcome);
                 None
             }
+            ClientShellMode::Control(scope) => {
+                self.route_control_key(scope, key, outcome);
+                None
+            }
             ClientShellMode::Copy => {
                 if self
                     .copy_mode

@@ -347,10 +347,35 @@ pub struct NavigateKeybinds {
     pub pane_right: ActionKeybinds,
 }
 
+/// Shared plain-key verbs for the tab/space/agent modes, zellij-style: the same
+/// letter acts on whichever scope is active, plus in-mode scope switches.
+#[derive(Debug, Clone)]
+pub struct ControlKeybinds {
+    pub new: ActionKeybinds,
+    pub rename: ActionKeybinds,
+    pub close: ActionKeybinds,
+    pub previous: ActionKeybinds,
+    pub next: ActionKeybinds,
+    pub up: ActionKeybinds,
+    pub down: ActionKeybinds,
+    pub move_back: ActionKeybinds,
+    pub move_forward: ActionKeybinds,
+    pub zoom: ActionKeybinds,
+    pub scope_tabs: ActionKeybinds,
+    pub scope_spaces: ActionKeybinds,
+    pub scope_agents: ActionKeybinds,
+    pub scope_panes: ActionKeybinds,
+}
+
 /// Parsed keybinds for Herdr actions.
 #[derive(Debug, Clone)]
 pub struct Keybinds {
     pub navigate: NavigateKeybinds,
+    pub control: ControlKeybinds,
+    pub tab_mode: ActionKeybinds,
+    pub space_mode: ActionKeybinds,
+    pub agent_mode: ActionKeybinds,
+    pub pane_mode: ActionKeybinds,
     pub help: ActionKeybinds,
     pub settings: ActionKeybinds,
     pub new_workspace: ActionKeybinds,
@@ -368,6 +393,8 @@ pub struct Keybinds {
     pub next_workspace: ActionKeybinds,
     pub previous_agent: ActionKeybinds,
     pub next_agent: ActionKeybinds,
+    pub move_workspace_up: ActionKeybinds,
+    pub move_workspace_down: ActionKeybinds,
     pub focus_agent: Vec<IndexedKeybind>,
     pub new_tab: ActionKeybinds,
     pub rename_tab: ActionKeybinds,
@@ -375,6 +402,8 @@ pub struct Keybinds {
     pub next_tab: ActionKeybinds,
     pub move_tab_previous: ActionKeybinds,
     pub move_tab_next: ActionKeybinds,
+    pub move_tab_left: ActionKeybinds,
+    pub move_tab_right: ActionKeybinds,
     pub switch_tab: Vec<IndexedKeybind>,
     pub switch_workspace: Vec<IndexedKeybind>,
     pub close_tab: ActionKeybinds,
@@ -517,6 +546,9 @@ impl Config {
         let mut navigate_registry = BindingRegistry::new(prefix_keys.clone(), prefix_source);
         navigate_registry.reserve_prefix_keys("keys.prefix", prefix_source);
         reserve_navigate_runtime_keys(&mut navigate_registry);
+        let mut control_registry = BindingRegistry::new(prefix_keys.clone(), prefix_source);
+        control_registry.reserve_prefix_keys("keys.prefix", prefix_source);
+        reserve_control_runtime_keys(&mut control_registry);
         let prefix = prefix_keys;
 
         macro_rules! empty_action {
@@ -534,6 +566,26 @@ impl Config {
                 pane_up: empty_action!(),
                 pane_right: empty_action!(),
             },
+            control: ControlKeybinds {
+                new: empty_action!(),
+                rename: empty_action!(),
+                close: empty_action!(),
+                previous: empty_action!(),
+                next: empty_action!(),
+                up: empty_action!(),
+                down: empty_action!(),
+                move_back: empty_action!(),
+                move_forward: empty_action!(),
+                zoom: empty_action!(),
+                scope_tabs: empty_action!(),
+                scope_spaces: empty_action!(),
+                scope_agents: empty_action!(),
+                scope_panes: empty_action!(),
+            },
+            tab_mode: empty_action!(),
+            space_mode: empty_action!(),
+            agent_mode: empty_action!(),
+            pane_mode: empty_action!(),
             help: empty_action!(),
             settings: empty_action!(),
             new_workspace: empty_action!(),
@@ -551,6 +603,8 @@ impl Config {
             next_workspace: empty_action!(),
             previous_agent: empty_action!(),
             next_agent: empty_action!(),
+            move_workspace_up: empty_action!(),
+            move_workspace_down: empty_action!(),
             focus_agent: Vec::new(),
             new_tab: empty_action!(),
             rename_tab: empty_action!(),
@@ -558,6 +612,8 @@ impl Config {
             next_tab: empty_action!(),
             move_tab_previous: empty_action!(),
             move_tab_next: empty_action!(),
+            move_tab_left: empty_action!(),
+            move_tab_right: empty_action!(),
             switch_tab: Vec::new(),
             switch_workspace: Vec::new(),
             close_tab: empty_action!(),
@@ -647,6 +703,19 @@ impl Config {
                 }
             };
         }
+        macro_rules! apply_control {
+            ($target:expr, $field:ident, $source:expr) => {
+                if field_source!($field) == $source {
+                    $target = parse_control_bindings(
+                        concat!("keys.", stringify!($field)),
+                        &self.keys.$field,
+                        &mut control_registry,
+                        &mut diagnostics,
+                        $source,
+                    );
+                }
+            };
+        }
 
         for source in [BindingSource::User, BindingSource::Default] {
             apply_navigate!(
@@ -663,6 +732,24 @@ impl Config {
             apply_navigate!(keybinds.navigate.pane_down, navigate_pane_down, source);
             apply_navigate!(keybinds.navigate.pane_up, navigate_pane_up, source);
             apply_navigate!(keybinds.navigate.pane_right, navigate_pane_right, source);
+            apply_control!(keybinds.control.new, control_new, source);
+            apply_control!(keybinds.control.rename, control_rename, source);
+            apply_control!(keybinds.control.close, control_close, source);
+            apply_control!(keybinds.control.previous, control_previous, source);
+            apply_control!(keybinds.control.next, control_next, source);
+            apply_control!(keybinds.control.up, control_up, source);
+            apply_control!(keybinds.control.down, control_down, source);
+            apply_control!(keybinds.control.move_back, control_move_back, source);
+            apply_control!(keybinds.control.move_forward, control_move_forward, source);
+            apply_control!(keybinds.control.zoom, control_zoom, source);
+            apply_control!(keybinds.control.scope_tabs, control_scope_tabs, source);
+            apply_control!(keybinds.control.scope_spaces, control_scope_spaces, source);
+            apply_control!(keybinds.control.scope_agents, control_scope_agents, source);
+            apply_control!(keybinds.control.scope_panes, control_scope_panes, source);
+            apply_action!(keybinds.tab_mode, tab_mode, source);
+            apply_action!(keybinds.space_mode, space_mode, source);
+            apply_action!(keybinds.agent_mode, agent_mode, source);
+            apply_action!(keybinds.pane_mode, pane_mode, source);
             apply_action!(keybinds.help, help, source);
             apply_action!(keybinds.settings, settings, source);
             apply_action!(keybinds.new_workspace, new_workspace, source);
@@ -684,6 +771,8 @@ impl Config {
             apply_action!(keybinds.next_workspace, next_workspace, source);
             apply_action!(keybinds.previous_agent, previous_agent, source);
             apply_action!(keybinds.next_agent, next_agent, source);
+            apply_action!(keybinds.move_workspace_up, move_workspace_up, source);
+            apply_action!(keybinds.move_workspace_down, move_workspace_down, source);
             apply_indexed!(
                 keybinds.focus_agent,
                 focus_agent,
@@ -696,6 +785,8 @@ impl Config {
             apply_action!(keybinds.next_tab, next_tab, source);
             apply_action!(keybinds.move_tab_previous, move_tab_previous, source);
             apply_action!(keybinds.move_tab_next, move_tab_next, source);
+            apply_action!(keybinds.move_tab_left, move_tab_left, source);
+            apply_action!(keybinds.move_tab_right, move_tab_right, source);
             apply_indexed!(
                 keybinds.switch_tab,
                 switch_tab,
@@ -891,6 +982,97 @@ fn parse_action_bindings(
         }
     }
     ActionKeybinds { bindings }
+}
+
+fn reserve_control_runtime_keys(registry: &mut BindingRegistry) {
+    // Everything the control-mode handler hardwires: exits (esc/enter), tab
+    // switching digits, and all four arrow fallbacks (up/down are hardwired
+    // here, unlike navigate mode where they are rebindable).
+    for combo in [
+        (KeyCode::Esc, KeyModifiers::empty()),
+        (KeyCode::Enter, KeyModifiers::empty()),
+        (KeyCode::Left, KeyModifiers::empty()),
+        (KeyCode::Right, KeyModifiers::empty()),
+        (KeyCode::Up, KeyModifiers::empty()),
+        (KeyCode::Down, KeyModifiers::empty()),
+    ] {
+        registry.reserve_direct(combo, "control reserved keys", BindingSource::Default);
+    }
+
+    for idx in '1'..='9' {
+        registry.reserve_direct(
+            (KeyCode::Char(idx), KeyModifiers::empty()),
+            "control reserved keys",
+            BindingSource::Default,
+        );
+    }
+}
+
+fn parse_control_bindings(
+    field: &'static str,
+    config: &BindingConfig,
+    registry: &mut BindingRegistry,
+    diagnostics: &mut Vec<String>,
+    source: BindingSource,
+) -> ActionKeybinds {
+    let mut bindings = Vec::new();
+    for raw in config.values() {
+        let raw = raw.trim();
+        if raw.is_empty() {
+            continue;
+        }
+        match parse_binding_string(raw) {
+            Some(ParsedBinding::Single(binding)) => {
+                if reject_control_binding(field, &binding, registry, diagnostics, source) {
+                    continue;
+                }
+                registry.register(&binding, field, source);
+                bindings.push(binding);
+            }
+            Some(ParsedBinding::Range(_)) => {
+                let diag = format!("range keybinding is only valid for indexed actions: {field} = {raw:?}; disabling binding");
+                warn!(message = %diag, "config diagnostic");
+                diagnostics.push(diag);
+            }
+            None => {
+                let diag = format!("invalid keybinding: {field} = {raw:?}; disabling binding");
+                warn!(message = %diag, "config diagnostic");
+                diagnostics.push(diag);
+            }
+        }
+    }
+    ActionKeybinds { bindings }
+}
+
+fn reject_control_binding(
+    field: &str,
+    binding: &ResolvedBinding,
+    registry: &BindingRegistry,
+    diagnostics: &mut Vec<String>,
+    source: BindingSource,
+) -> bool {
+    if binding.trigger.is_prefix() {
+        let diag = format!(
+            "control keybinding must not include prefix: {field} = {:?}; disabling binding",
+            binding.label
+        );
+        warn!(message = %diag, "config diagnostic");
+        diagnostics.push(diag);
+        return true;
+    }
+
+    if let Some(first_binding) = registry.conflict(binding) {
+        if source == BindingSource::Default && first_binding.source == BindingSource::User {
+            return true;
+        }
+        let first_field = &first_binding.field;
+        let diag = format!("{}: kept {first_field}, disabled {field}", binding.label);
+        warn!(message = %diag, "config diagnostic");
+        diagnostics.push(diag);
+        return true;
+    }
+
+    false
 }
 
 fn parse_navigate_bindings(
@@ -2391,6 +2573,128 @@ swap_pane_right = "prefix+shift+l"
             diag.contains("kept keys.previous_workspace")
                 && diag.contains("disabled keys.swap_pane_right")
         }));
+    }
+
+    #[test]
+    fn move_bindings_parse_and_conflict_like_other_actions() {
+        let config: Config = toml::from_str(
+            r#"
+[keys]
+move_tab_left = "alt+i"
+move_tab_right = "alt+i"
+move_workspace_up = "prefix+shift+u"
+"#,
+        )
+        .unwrap();
+
+        let diagnostics = config.collect_diagnostics();
+        let kb = config.keybinds();
+
+        assert_eq!(
+            binding_triggers(&kb.move_tab_left),
+            vec![BindingTrigger::Direct((
+                KeyCode::Char('i'),
+                KeyModifiers::ALT
+            ))]
+        );
+        assert!(kb.move_tab_right.bindings.is_empty());
+        assert!(diagnostics.iter().any(|diag| {
+            diag.contains("kept keys.move_tab_left")
+                && diag.contains("disabled keys.move_tab_right")
+        }));
+        assert_eq!(
+            binding_triggers(&kb.move_workspace_up),
+            vec![BindingTrigger::Prefix((
+                KeyCode::Char('u'),
+                KeyModifiers::SHIFT
+            ))]
+        );
+    }
+
+    #[test]
+    fn control_bindings_reject_reserved_and_prefix_syntax_keys() {
+        let config: Config = toml::from_str(
+            r#"
+[keys]
+control_new = "up"
+control_rename = "prefix+r"
+control_close = "m"
+"#,
+        )
+        .unwrap();
+
+        let diagnostics = config.collect_diagnostics();
+        let kb = config.keybinds();
+
+        assert!(kb.control.new.bindings.is_empty());
+        assert!(diagnostics.iter().any(|diag| {
+            diag.contains("kept control reserved keys") && diag.contains("keys.control_new")
+        }));
+        assert!(kb.control.rename.bindings.is_empty());
+        assert!(diagnostics
+            .iter()
+            .any(|diag| diag.contains("control keybinding must not include prefix")));
+        assert_eq!(
+            binding_triggers(&kb.control.close),
+            vec![BindingTrigger::Direct((
+                KeyCode::Char('m'),
+                KeyModifiers::empty()
+            ))]
+        );
+    }
+
+    #[test]
+    fn scoped_mode_entries_default_and_verbs_parse() {
+        let kb = Keybinds::default();
+        assert_eq!(
+            binding_triggers(&kb.tab_mode),
+            vec![BindingTrigger::Prefix((
+                KeyCode::Char('t'),
+                KeyModifiers::empty()
+            ))]
+        );
+        assert_eq!(
+            binding_triggers(&kb.space_mode),
+            vec![BindingTrigger::Prefix((
+                KeyCode::Char('s'),
+                KeyModifiers::SHIFT
+            ))]
+        );
+        assert_eq!(
+            binding_triggers(&kb.agent_mode),
+            vec![BindingTrigger::Prefix((
+                KeyCode::Char('a'),
+                KeyModifiers::empty()
+            ))]
+        );
+        assert_eq!(
+            binding_triggers(&kb.pane_mode),
+            vec![BindingTrigger::Prefix((
+                KeyCode::Char('f'),
+                KeyModifiers::empty()
+            ))]
+        );
+        assert_eq!(
+            binding_triggers(&kb.control.zoom),
+            vec![BindingTrigger::Direct((
+                KeyCode::Char('z'),
+                KeyModifiers::empty()
+            ))]
+        );
+        assert_eq!(
+            binding_triggers(&kb.control.new),
+            vec![BindingTrigger::Direct((
+                KeyCode::Char('n'),
+                KeyModifiers::empty()
+            ))]
+        );
+        assert_eq!(
+            binding_triggers(&kb.control.scope_agents),
+            vec![BindingTrigger::Direct((
+                KeyCode::Char('a'),
+                KeyModifiers::empty()
+            ))]
+        );
     }
 
     #[test]

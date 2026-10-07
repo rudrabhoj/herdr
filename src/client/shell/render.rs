@@ -121,6 +121,11 @@ pub(super) fn render_mode_bar(
                     (" done".to_owned(), base),
                 ]);
             }
+            ClientShellMode::Control(scope) => {
+                segments.extend(control_mode_segments(
+                    scope, keybinds, key, mode_style, base,
+                ));
+            }
             ClientShellMode::Copy => {
                 let copy_mode = copy_mode?;
                 if let Some(prompt) = copy_mode.search_prompt.as_ref() {
@@ -227,6 +232,84 @@ pub(super) fn render_mode_bar(
         );
     }
     Some(bar)
+}
+
+/// Most important clusters first: narrow terminals clip on the right like every
+/// other bar.
+fn control_mode_segments(
+    scope: ControlScope,
+    keybinds: &LiveKeybindConfig,
+    key: Style,
+    mode_style: Style,
+    base: Style,
+) -> Vec<(String, Style)> {
+    let control = &keybinds.keybinds.control;
+    let label = |bindings: &crate::config::ActionKeybinds| {
+        bindings.label().unwrap_or_else(|| "unset".to_owned())
+    };
+    let pair = |a, b| format!("{}/{}", label(a), label(b));
+    let (badge, nav, nav_label) = match scope {
+        ControlScope::Tabs => (
+            " TABS ",
+            pair(&control.previous, &control.next),
+            " prev/next  ",
+        ),
+        ControlScope::Spaces => (" SPACES ", pair(&control.up, &control.down), " prev/next  "),
+        ControlScope::Agents => (" AGENTS ", pair(&control.up, &control.down), " prev/next  "),
+        ControlScope::Panes => (
+            " PANES ",
+            format!(
+                "{}/{}/{}/{}",
+                label(&control.previous),
+                label(&control.down),
+                label(&control.up),
+                label(&control.next)
+            ),
+            " focus  ",
+        ),
+    };
+    let panes = scope == ControlScope::Panes;
+    let mut segments = vec![
+        (badge.to_owned(), mode_style),
+        (" ".to_owned(), base),
+        (nav, key),
+        (nav_label.to_owned(), base),
+    ];
+    if !panes {
+        // Digits are inert in the panes scope, so the bar must not advertise them.
+        segments.extend([("1-9".to_owned(), key), (" go  ".to_owned(), base)]);
+    }
+    if scope != ControlScope::Agents {
+        segments.extend([
+            (pair(&control.move_back, &control.move_forward), key),
+            ((if panes { " swap  " } else { " move  " }).to_owned(), base),
+            (label(&control.new), key),
+            ((if panes { " split  " } else { " new  " }).to_owned(), base),
+            (label(&control.rename), key),
+            (" rename  ".to_owned(), base),
+            (label(&control.close), key),
+            (" close  ".to_owned(), base),
+        ]);
+    }
+    if panes {
+        segments.extend([(label(&control.zoom), key), (" zoom  ".to_owned(), base)]);
+    }
+    segments.extend([
+        (
+            format!(
+                "{}/{}/{}/{}",
+                label(&control.scope_tabs),
+                label(&control.scope_spaces),
+                label(&control.scope_agents),
+                label(&control.scope_panes)
+            ),
+            key,
+        ),
+        (" tabs/spaces/agents/panes  ".to_owned(), base),
+        ("esc".to_owned(), key),
+        (" done".to_owned(), base),
+    ]);
+    segments
 }
 
 pub(super) struct ShellRenderState<'a> {

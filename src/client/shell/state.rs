@@ -274,6 +274,17 @@ pub(super) enum ClientShellMode {
     Navigate,
     Resize,
     Copy,
+    Control(ControlScope),
+}
+
+/// Which noun the shared `control_*` verb keymap acts on. One sticky mode
+/// presents as four user-facing modes: TABS, SPACES, AGENTS, PANES.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum ControlScope {
+    Tabs,
+    Spaces,
+    Agents,
+    Panes,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1401,7 +1412,10 @@ impl ClientShellState {
             } else if active_keymap_changed
                 && matches!(
                     self.mode,
-                    ClientShellMode::Prefix | ClientShellMode::Navigate | ClientShellMode::Resize
+                    ClientShellMode::Prefix
+                        | ClientShellMode::Navigate
+                        | ClientShellMode::Resize
+                        | ClientShellMode::Control(_)
                 )
             {
                 self.mode = ClientShellMode::Terminal;
