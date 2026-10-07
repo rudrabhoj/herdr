@@ -1270,6 +1270,79 @@ failure from step 6; (4) owner reattaches only after DONE, then G4.
   integration" badge; reinstalling is the owner's call.
 - R5 (folded) step 10 polls and closes its probe pane.
 
+### Phase 12 - pi, codex, and the untested angles [UNHARDENED]
+
+**Why**: Phases 10-11 only cover Claude. On this machine herdr's codex and pi
+integrations are NOT installed (`herdr integration status`: `codex: not
+installed`, `pi: not installed`), so herdr has no session id for them: the live
+codex pane `wS:pW` (`codex -m gpt-6-astra -c model_reasoning_effort=high
+--search --dangerously-bypass-approvals-and-sandbox`, cwd
+`~/Work/Keemakr 2.0/covalent`) would come back from any restart as a bare shell,
+conversation and flags lost. Also several Claude angles were never exercised.
+
+**Facts (verified 2026-10-07)**
+- codex-cli 0.159.2. `codex resume [OPTIONS] [SESSION_ID]` itself accepts
+  `-m`, `-c`, `--search`, `--dangerously-bypass-approvals-and-sandbox`, `-s`,
+  `-a`, `-p`; the same flags placed before `resume` also parse
+  (`codex <flag> resume --help` prints resume help). Whether flags before the
+  subcommand APPLY to the resumed session is unverified.
+- A running codex holds its rollout file open:
+  `/proc/<pid>/fd` -> `~/.codex/sessions/YYYY/MM/DD/rollout-<ts>-<uuid>.jsonl`;
+  the uuid is the session id `codex resume` takes.
+- The live codex is a node wrapper (`node .../bin/codex ...`) whose child is the
+  native `codex` binary with the same args; herdr detects the pane as `codex`.
+- pi 0.84.3: `pi --session <path|id>`, `--model <pattern>`, `--thinking <level>`,
+  `--provider <name>`; `~/.pi/agent/extensions/` holds 15+ owner extensions.
+- Phase 10 `launch_profile` inserts kept args right after argv[0]:
+  `codex <kept> resume <id>`, `pi <kept> --session <path>`.
+
+**Implement**
+1. Phase 10 code: insert kept args after a leading subcommand word (argv[1]
+   not starting with `-`), so codex gets `codex resume <kept> <id>` (resume's
+   own options, certain to apply); claude/pi unchanged. Unit test per agent.
+2. Phase 10 code: a resume derived from launch resolution dedupes on the
+   session (`agent_resume::dedupe_key(source, agent, ref)`), not on argv, so
+   one session open in two panes under two variants restores once.
+3. Config: `resume_keep_args.codex = ["--dangerously-bypass-approvals-and-sandbox",
+   "--search", "-m=", "--model=", "-c=", "--config=", "-s=", "--sandbox=",
+   "-a=", "--ask-for-approval=", "-p=", "--profile="]`,
+   `resume_keep_args.pi = ["--model=", "--thinking=", "--provider="]`.
+4. Install herdr's codex and pi integrations with the NEW binary after the
+   Phase 11 deploy (`herdr integration install codex`, `... pi`), backing up
+   `~/.codex/config.toml` and `~/.pi/agent/extensions/` first; check that pi
+   starts with all owner extensions loaded and codex starts, both offline/
+   no prompt sent.
+5. Migration (Phase 11 capture/apply) extended to codex: capture each live
+   codex pane's session id from its open rollout fd and its kept args from
+   argv; apply ADDS `agent_session {source herdr:codex, agent codex, kind id}`
+   and `agent_resume` to that pane in the final snapshot. pi panes: none live
+   today; capture reports any it finds as unresumable.
+6. Claude angles never exercised, each a cheap isolated e2e step with no model
+   call: in-session `/clear` and `/resume <other id>` move the recorded resume
+   to the new session id; `herdr server reload-config` applies edited
+   `agent_variants`/`resume_keep_args`; the interactive `/resume` picker in
+   `claude-me` lists a session created by `claude-kee`.
+
+**Verify (gates)**
+- [ ] G12.1 unit: kept-arg insertion per agent (claude, codex, pi), dedupe on
+      session for two variants.
+- [ ] G12.2 isolated e2e, no model calls: codex started with the live flag set
+      in an isolated herdr after its integration is installed there (isolated
+      `CODEX_HOME` copy), session reported, saved resume =
+      `codex resume <kept> <id>`, restart restores a codex process with those
+      argv; same for pi with an isolated agent dir copy.
+- [ ] G12.3 migration rehearsal including the live codex pane (fake ids),
+      asserting the codex pane gets `agent_session` + `agent_resume`.
+- [ ] G12.4 Claude angles of step 6.
+- [ ] G12.5 live, after deploy: codex and pi integrations installed, owner
+      extensions intact, `wS:pW` resumed with its flags.
+
+**Untested, accepted as residual unless the review objects**
+- macOS (`process_environ` via KERN_PROCARGS2; account symlinks not set up on
+  the Mac); `herdr --remote`; concurrent use of one session in two accounts;
+  a Claude update adding a new per-session store dir that is not shared;
+  a variant-less custom `CLAUDE_CONFIG_DIR` restoring in the default account.
+
 ## 5. Decisions log / open questions
 
 - Mode name: `Control` (alternatives considered: `Manage`, `Tab` (too narrow),

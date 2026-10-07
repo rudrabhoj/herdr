@@ -106,3 +106,11 @@ near-verbatim). Tiers as above.
   running Claude panes) must reach the fork build without losing any Claude
   conversation, account, or bypass flag; the deployment is the irreversible step.
 - RULED (standing, Phase 8): "it must never break my installed herdr".
+- RULED (2026-10-07, later): "what angles did you not tested? ... think
+  additionally about use of pi and codex too. And then use harden to test them.
+  remember to not over waste tokens".
+- DERIVED: pi and codex panes must survive a herdr restart like Claude panes:
+  same conversation, same launch flags (the live codex runs `-m gpt-6-astra -c
+  model_reasoning_effort=high --search --dangerously-bypass-approvals-and-sandbox`).
+- DERIVED: the owner's ~/.pi/agent/extensions (15+ custom) and ~/.codex config
+  must keep working after any herdr integration install.
