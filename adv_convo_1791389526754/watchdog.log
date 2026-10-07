@@ -5,3 +5,5 @@
 16:16:11Z wY:p1 (implementer) idle (turn=adversary, no action)
 16:25:14Z wY:p1 (implementer) working (round 1, turn=implementer)
 16:25:14Z wY:p4 (adversary) done (turn=implementer, no action)
+16:26:45Z wY:p1 (implementer) done (turn=adversary, no action)
+16:26:45Z wY:p4 (adversary) working (round 1, turn=adversary)

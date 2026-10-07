@@ -1313,10 +1313,16 @@ Several Claude angles were never exercised either.
   reports `resume_argv` itself, built from `process.argv` with its own
   allowlist (`--model`, `--thinking`, `--provider`, `--approve`/`-a`) plus
   `--session <path>`; herdr config has no `resume_keep_args.pi` (the server
-  resolver then stays out of pi's way: no keep list, no variant).
+  resolver then stays out of pi's way: no keep list, no variant). A future pi
+  `agent_variant` must not replace a self-reported resume (the resolver would
+  rebuild it from the wiped `["pi"]` argv).
 - D4 `-c`/`--config` values are not kept (they would land in the 664
   `session.json` and may carry secrets); codex overrides belong in
   config.toml or a `-p` profile. `--worktree` and `--remote` are never kept.
+  So the restored `wS:pW` argv differs from the live one by design: expected
+  exactly `codex resume -m gpt-6-astra --search
+  --dangerously-bypass-approvals-and-sandbox <id>` (effort comes from
+  config.toml).
 - D5 `server reload-config` changes resume resolution from each pane's NEXT
   session report or detection onward; existing panes keep their recorded
   command until then (documented).
@@ -1327,6 +1333,8 @@ Several Claude angles were never exercised either.
    resume dedupes on the session, not argv; (c) resolution also runs when a
    state report (`pane.report_agent`) first establishes a session (A8);
    (d) the fork's pi asset sends `resume_argv` per D3. Unit tests per change.
+   1(c) resolves once per newly established session, never per state report
+   (`UserPromptSubmit`/`Stop` arrive every turn and resolution reads /proc).
 2. Build and stage `herdr-<newsha>`; re-run the Phase 10 e2e, the migration
    rehearsal and Phase 11 G3 against it; Phase 11 deploys `<newsha>` instead
    of `e897ed0e` (Phase 11 binary references updated).
@@ -1341,15 +1349,20 @@ Several Claude angles were never exercised either.
    the lock name); codex capture runs last; apply ADDS `agent_session {source
    herdr:codex, agent codex, kind id}` + `agent_resume` to that pane; the
    report and rollback print `codex resume <kept> <id>` with cwd for every
-   codex pane. Step 10 also checks the old codex pids are gone and records
-   `codex --version`.
+   codex pane. Just before the new server starts (after step 9's predecessor
+   steps), the deploy polls until the captured codex pids are gone, with a
+   timeout that reports instead of starting into a writer-lock collision;
+   step 10 re-checks and records `codex --version`.
 5. Integrations, inside the Phase 11 deploy after apply and before the new
    server starts: back up `~/.codex/config.toml`, `~/.codex/hooks.json` (absent
    today) and `~/.pi/agent/extensions/`; `herdr integration install codex` and
    `... pi` with the new binary. The restored `wS:pW` therefore opens on the
    hook-trust modal: the DONE banner tells the owner to choose "Trust all and
    continue". `herdr-agent-state.ts` is an untracked file in the `~/.pi/agent`
-   git repo; committing it is the owner's call.
+   git repo; committing it is the owner's call. An install failure is never
+   fatal: it is logged, listed in the DONE banner with its manual
+   `herdr integration install <x>` command, and never triggers `rollback`
+   (codex tracking then starts after that manual install).
 6. Claude angles, isolated, no model call, nothing touching live
    conversations: in-session `/clear` and `/resume <id>` move the recorded
    resume to the new id; `claude-me`'s `/resume` picker lists a session made by
@@ -1359,7 +1372,11 @@ Several Claude angles were never exercised either.
 
 **Verify (gates)**
 - [ ] G12.1 unit: kept-arg placement for claude, codex, pi; session dedupe for
-      two variants; resolution on a first state-report session.
+      two variants; resolution on a first state-report session and NOT on a
+      second report for the same session; `launch_profile` on the live codex
+      argv shape returns exactly the D4 string, and the migration script's
+      codex capture of the same argv returns the identical argv (no rewrite
+      on first detection).
 - [ ] G12.2 isolated e2e with stubs (D1): stub `codex` and `pi` first on the
       isolated server's PATH. The codex stub records argv and holds an open
       fake rollout + writer lock; the real installed codex hook script, fed a
@@ -1369,13 +1386,15 @@ Several Claude angles were never exercised either.
       `pi <kept> --session <path>`; after restart the stubs record exactly those
       argv.
 - [ ] G12.3 migration rehearsal including the live codex pane (fake ids):
-      codex pane gets `agent_session` + `agent_resume`; a capture with the codex
-      pane hidden refuses.
+      codex pane gets `agent_session` + `agent_resume` equal to the D4 string;
+      a capture with the codex pane hidden refuses; an injected integration
+      install failure (invalid pre-existing `hooks.json` in the isolated
+      CODEX_HOME) still ends in DONE on the new server.
 - [ ] G12.4 Claude angles of step 6.
 - [ ] G12.5 live, after deploy: integration files present, owner pi extensions
       byte-identical to the backup, `~/.codex/hooks.json` valid, after the
       owner's trust `hooks.state` holds the herdr hook, `wS:pW` resumed with
-      its flags and conversation.
+      exactly the D4 argv and its conversation.
 
 **Residual (accepted)**
 - macOS; `herdr --remote`; concurrent use of one session in two accounts; a
