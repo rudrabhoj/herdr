@@ -1270,7 +1270,7 @@ failure from step 6; (4) owner reattaches only after DONE, then G4.
   integration" badge; reinstalling is the owner's call.
 - R5 (folded) step 10 polls and closes its probe pane.
 
-### Phase 12 - pi, codex, and the untested angles [UNHARDENED]
+### Phase 12 - pi, codex, and the untested angles [HARDENED 2026-10-07, adv_convo_1791389526754]
 
 **Why**: Phases 10-11 only cover Claude. On this machine herdr's codex and pi
 integrations are NOT installed (`herdr integration status`: `codex: not
@@ -1351,8 +1351,10 @@ Several Claude angles were never exercised either.
    report and rollback print `codex resume <kept> <id>` with cwd for every
    codex pane. Just before the new server starts (after step 9's predecessor
    steps), the deploy polls until the captured codex pids are gone, with a
-   timeout that reports instead of starting into a writer-lock collision;
-   step 10 re-checks and records `codex --version`.
+   timeout: on timeout the deploy drops that pane's codex `agent_session` and
+   `agent_resume`, prints its manual `codex resume ...` command, and STILL
+   starts the new server (never halts serverless, never `rollback`); step 10
+   re-checks and records `codex --version`.
 5. Integrations, inside the Phase 11 deploy after apply and before the new
    server starts: back up `~/.codex/config.toml`, `~/.codex/hooks.json` (absent
    today) and `~/.pi/agent/extensions/`; `herdr integration install codex` and
@@ -1405,6 +1407,32 @@ Several Claude angles were never exercised either.
   `/resume` stays invisible to herdr until then.
 - An npm `codex` update between rehearsal and deploy can change hook or resume
   behavior; the report records `codex --version`.
+
+**Hardening record (adv_convo_1791389526754; adversary claude/claude-opus-5-5/high
+as claude-kee; judge same tuple; converged round 3, both judges agree on sha
+fac8aef3)**
+- Round 1 (6 MAJOR, 4 MINOR): pi wipes its argv via `process.title` -> pi
+  asset reports `resume_argv` (D3); codex hook trust gate -> owner trusts once
+  (D2); rehearsal with copied credentials could log codex out -> stubs only
+  (D1); codex capture had no independent expected set -> live `pane list` +
+  fd uuid checks; deploy binary/order undefined -> explicit order on a new
+  build; Claude angle tests could touch live conversations -> throwaway
+  sessions; MINOR: reload semantics (D5), first state-report resolution,
+  `-c` secrets (D4), keep-list gaps.
+- Round 2 (1 MAJOR, 3 MINOR): integration install failure inside the rollback
+  window -> non-fatal; exact expected codex argv; codex-pid poll moved before
+  server start; script/server argv equality and once-per-session resolution.
+- Round 3: CONVERGED, condition folded into step 4 (poll timeout never halts).
+
+**Accepted execution order**: 1(a)-(d) + G12.1; build `<newsha>` and re-run
+Phase 10 e2e, G12.3, Phase 11 G3, update Phase 11 references; G12.2 (stubs);
+G12.4 (throwaway Claude sessions); render the codex keep list before capture;
+Phase 11 deploy of `<newsha>` (apply Claude + codex, non-fatal installs,
+codex-pid poll, start); owner trusts hooks in `wS:pW`; G12.5.
+
+**Residual register (accepted)**: as listed above, plus hook trust may be asked
+again when a reinstall changes the hook config; whether codex fires SessionStart
+before the first turn is unverified (no gate depends on it).
 
 ## 5. Decisions log / open questions
 
