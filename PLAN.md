@@ -974,6 +974,74 @@ script on the owner's Mac today)**
 Convergence is NOT authorization to spend or ship; owner decisions (items 1-3
 of the order) stay in their own queue.
 
+### Phase 9 - Upstream sync onto the client-rendered shell (2026-10-07)
+
+**What moved upstream**: 460 commits from `10974c82` to `a124eed7` (v0.9.x).
+`207be3c7 refactor: render the shell in the client (#3487)` deleted
+`src/app/input/*`, `src/ui/menus.rs`, and `src/ui/keybind_help.rs`; input
+routing, mode bars, and help now live in the client (`src/client/shell/`,
+`src/input/`), and every action is an endpoint API method. A mechanical rebase
+was impossible, so the feature commit was re-implemented on a fresh branch
+(`sync/upstream-2026-10-07`) and the docs/build commits replayed unchanged.
+Upstream also moved the vendored libghostty-vt build to zig 0.16.0.
+
+**Mapping (old -> new)**
+- `Mode::Control` + `AppState.control_scope` -> `ClientShellMode::Control(ControlScope)`
+  (`src/client/shell/state.rs`); the scope rides in the mode so the mode bar
+  and input-lease context see it without an extra field.
+- `handle_control_key` / `control_action_for_key` / sticky set ->
+  `src/client/shell/control.rs` (`route_control_key`, same precedence: prefix
+  chains, scope letters, then esc/enter/entry toggle, then verbs).
+- `NavigateAction::{MoveTab*, MoveWorkspace*, Enter*Mode}` ->
+  `KeybindAction` variants (`src/input/keybindings.rs`), resolved to
+  `tab.move` / `workspace.move` / `workspace.move_block` in
+  `endpoint_method_for_action`; workspace moves reuse the drag path's
+  `workspace_move_method` over sidebar root entries.
+- `render_control_overlay` -> `control_mode_segments` in
+  `src/client/shell/render.rs`. The bottom-tab-bar mouse guard is gone: the
+  composer already clears tab hits when a mode bar replaces the tab row.
+- Help group -> `src/input/keybind_help.rs`. Remote-profile round-trip test ->
+  `src/config.rs` (`parse_client_keybindings` no longer exists).
+- Config layer (`model.rs`, `keybinds.rs`, `main.rs` template, reference JSON,
+  en/ja/zh-cn docs) merged three-way; the `docs/next/CHANGELOG.md` entry was
+  dropped because upstream now curates the changelog only at release time.
+
+**Decisions**
+- Upstream added `move_tab_previous` / `move_tab_next` (#2561), which WRAP.
+  Ours stay as `move_tab_left` / `move_tab_right` and stop at the edges (the
+  no-wrap decision in section 5); both coexist. Dropping ours would shrink the
+  fork by two fields at the cost of that decision - owner's call.
+- Zig: 0.16.0 includes the Mach-O arm64e TBD fix (ziglang/zig#31673, merged
+  2026-03-27; 0.16.0 released 2026-04-13) and macOS 26.4 headers, so
+  `build_and_install.sh` fetches the official tarball on both OSes. This
+  retires Phase 8 residuals 4 (brew zig@0.15 deprecation) and the patched
+  libcxx copy.
+
+**Verify**
+- [x] fmt + `clippy --all-targets -D warnings` clean.
+- [x] nextest: 3973 tests, all green. `integration_commands_run_locally_when_server_is_missing`
+      fails only when the shell exports `CLAUDE_CONFIG_DIR` (the test fakes
+      `HOME` but not that variable); passes with it unset. Pre-existing upstream.
+- [x] `just maintenance-test`, `ui-hot-path-architecture-test`,
+      `integration-assets-test`, `docs-contract-test` green (config-reference
+      parity included).
+- [x] 23 new/ported unit tests (`client::shell::tests::control_modes`, help
+      group, keybind parsing/conflicts, profile round-trip).
+- [x] Headless end-to-end (release binary, isolated XDG root, all `HERDR_*`
+      stripped, live server untouched): 47/47 checks with the fork's
+      `herdr.config.toml` rendered as the config - every mode entry, verbs,
+      sticky vs leaving actions, no-wrap edges, worktree-free workspace moves,
+      scope hops, prefix chaining, toggle-off, alt+i/o, auto-split direction,
+      zoom toggle, detach/reattach persistence, clean shutdown.
+- [x] `build_and_install.sh` cold run under a fake `HOME` (real rustup caches,
+      `HERDR_*` stripped): zig 0.16.0 fetched, release built and smoke-tested,
+      installed, template rendered with `default_shell = "/usr/bin/fish"` and
+      passed `config check`, fish_user_paths set; reruns idempotent; a bash
+      user gets exactly one `.bashrc` line.
+- [ ] `just windows-lint` not run (no xwin SDK on this host).
+- [ ] macOS build with the official zig 0.16.0 tarball not exercised here.
+- [ ] Manual keyboard feel on a real terminal. [needs a human at the keyboard]
+
 ## 5. Decisions log / open questions
 
 - Mode name: `Control` (alternatives considered: `Manage`, `Tab` (too narrow),
