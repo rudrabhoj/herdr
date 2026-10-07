@@ -1514,8 +1514,9 @@ claude-kee; converged round 2, both judges agree)**: round 1 F1 BLOCKER
 `releases/20261007` (staged by the 17:04 dry-run with `fb11df79`) or pass a
 new `NEW_REL`; (3) `NEW_BIN=~/.local/share/herdr/staged/herdr-fbd57906
 fork/deploy/deploy-herdr.sh dry-run`; (4) `deploy` detached in the same
-sitting, followed from an ssh shell; (5) after DONE reattach, trust the codex
-hooks once, read VERIFY/REPORT, `rollback` by hand if anything is wrong.
+sitting, followed from an ssh shell; (5) after DONE reattach, read
+VERIFY/REPORT, `rollback` by hand if anything is wrong. (The codex hook trust
+is already stored, see Phase 14.)
 
 **Residual register (accepted)**: SIGKILL/untrapped SIGTERM of the deploy
 skips the EXIT trap (run `rollback <run dir>` by hand); a refusing rollback
@@ -1524,6 +1525,41 @@ codex waits at the hook-trust dialog); a stale variant label can show
 briefly between an agent relaunch and its SessionStart; pi refreshes its
 label on session start, model select and each turn; the Claude hook stays v7
 until reinstalled after the deploy.
+
+### Phase 14 - Real codex and pi end to end (2026-10-07)
+
+The owner asked why codex and pi were only proven with stand-ins. This phase ran
+the real CLIs once each in an isolated herdr (`fbd57906`, XDG roots under
+`/tmp/claude-1000/rx`, `HERDR_*` stripped, throwaway cwd), against the real
+`~/.codex` and `~/.pi/agent` logins. Cost: one one-word turn per agent.
+
+Setup changed the live agent homes, on purpose, because the deploy installs
+the same integrations: `~/.codex/hooks.json` + `herdr-agent-state.sh`,
+`[features] hooks = true` and the four hook `trusted_hash` entries in
+`~/.codex/config.toml`, and `~/.pi/agent/extensions/herdr-agent-state.ts`.
+Backups: `~/.local/share/claude-accounts/pre-integration-20261007T172634/`.
+codex was updated 0.159.2 -> 0.161.0 by the owner's ruling; pi was not updated
+(it is the owner's custom build) and needed no code change.
+
+| Check | codex 0.161.0 | pi 0.84.3 |
+|---|---|---|
+| Launch | `codex -m gpt-6-astra --search --dangerously-bypass-approvals-and-sandbox` | `pi --model openai-codex/gpt-6-astra --thinking low` |
+| Label | `codex · rudrabhoj@gmail.com` | `pi · rudrabhoj@gmail.com` |
+| Saved restore | `codex resume -m gpt-6-astra --search --dangerously-bypass-approvals-and-sandbox <id>` | `pi --model openai-codex/gpt-6-astra --thinking low --session <path>` |
+| After server restart | native child argv matches exactly, conversation shown, YOLO mode | session loaded (token count and the `pong` turn in scrollback), model and thinking kept |
+| Label after restart | unchanged | unchanged |
+
+Findings:
+- codex asks "Hooks need review" once, the first time it meets the hooks.
+  The answer is now stored in the live config, and `herdr integration install
+  codex` from `fbd57906` writes byte-identical hooks (modulo `CODEX_HOME`), so
+  the deploy's reinstall keeps that trust. The restored codex no longer stops
+  at the dialog. This retires that Phase 13 residual.
+- The codex hook ignores any socket error (0.5 s timeout, `except: pass`), so
+  a codex started under the old 0.8.0 server before the deploy is unaffected.
+- pi's `model_select` label refresh was not exercised live: pi's anthropic
+  login could not refresh, so there was no second account to switch to. The
+  bun test still covers it.
 
 ## 5. Decisions log / open questions
 

@@ -37,5 +37,6 @@ Every harness runs in isolated XDG roots under `/tmp/claude-1000`, with every `H
 | `e2e_migration.py` | The new server restores a fake-id copy of the live 0.8.0 snapshot. | none |
 | `e2e_deploy.py` | Stand-in claude, codex and pi. Account labels follow login changes. Full deploy from the operator's env, rollback, an injected install failure, and an injected apply failure. | none |
 | `e2e_claude_angles.py` | `/clear` and `/resume` move the recorded session, and `claude-me`'s picker lists `claude-kee` sessions. | 1 haiku |
+| manual, PLAN.md Phase 14 | Real codex and pi: account label, saved restore command, and restore after a server restart with the conversation intact. | 1 turn each |
 
 The stand-ins only work if they come first on PATH inside the isolated fish. `e2e_deploy.py` aborts before starting anything if fish would resolve a real agent.
