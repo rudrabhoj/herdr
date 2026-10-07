@@ -1009,8 +1009,9 @@ Upstream also moved the vendored libghostty-vt build to zig 0.16.0.
 **Decisions**
 - Upstream added `move_tab_previous` / `move_tab_next` (#2561), which WRAP.
   Ours stay as `move_tab_left` / `move_tab_right` and stop at the edges (the
-  no-wrap decision in section 5); both coexist. Dropping ours would shrink the
-  fork by two fields at the cost of that decision - owner's call.
+  no-wrap decision in section 5); both coexist. RULED (owner, 2026-10-07):
+  ours are the fork's tab-move keys; upstream's stay unbound (default) and
+  untouched in code so future syncs do not conflict over them.
 - Zig: 0.16.0 includes the Mach-O arm64e TBD fix (ziglang/zig#31673, merged
   2026-03-27; 0.16.0 released 2026-04-13) and macOS 26.4 headers, so
   `build_and_install.sh` fetches the official tarball on both OSes. This
