@@ -1080,9 +1080,9 @@ No API or wire change; restore already prefers reported resume commands.
 ### Phase 11 - Live deployment and account migration [HARDENED 2026-10-07, adv_convo_1791387860515]
 
 **Goal**: move the live void-workstation herdr (release `20260906`, herdr
-0.8.0) to the fork build `fb11df79` (0.9.3, staged at
-`~/.local/share/herdr/staged/herdr-fb11df79`; Phase 12 replaced the
-original `e897ed0e`) so that every Claude pane comes
+0.8.0) to the fork build `fbd57906` (0.9.3, staged at
+`~/.local/share/herdr/staged/herdr-fbd57906`; Phase 12 and the Phase 13
+readiness fixes replaced the original `e897ed0e`) so that every Claude pane comes
 back in its own account, with its permission bypass exactly when it had one
 (either `--dangerously-skip-permissions` or `--permission-mode
 bypassPermissions`), and the same conversation. Intent: research/intent.md
@@ -1453,7 +1453,9 @@ account-switching pi extensions are honored. pi side documented in
 - [x] G12.1 unit: placement (claude/codex/pi), session dedupe for two
       variants, account sources/readers/labels; bun suite 28/28 incl. pi
       resume_argv and account switching. Once-per-session state-report
-      resolution is covered by code review and the stub e2e, not a unit test.
+      resolution: `e2e_deploy.py` scenario A sends a state report that first
+      establishes a codex session and asserts the restore command moves
+      (added after readiness finding F2; it was vacuous before).
 - [x] G12.2 + accounts: `fork/tests/e2e_deploy.py` scenario A, 20 checks
       (labels follow login changes for claude, codex, pi; exact restore argv
       after restart for all three).
@@ -1494,6 +1496,14 @@ G12.5); account polling cost with many panes (5 s, one stat per watched file).
 
 **Decision asked of the review**: which untested angle, if any, must be
 tested before the live deploy, and how, at low token cost.
+
+**Round 1 outcome**: F1 BLOCKER - the deploy's ERR trap missed failures in
+functions and every `die`; fixed with one EXIT trap (relink before the stop,
+rollback after); scenario C now injects capture, apply, verify and
+server-start failures plus a deleted old cwd. F2 - covered (above). F3 - the
+account poll parsed one shared file once per pane; now once per file per
+poll. Run `dry-run` again immediately before `deploy` in the same sitting:
+capture's strictness decides whether `herdr` gets locked.
 
 ## 5. Decisions log / open questions
 
