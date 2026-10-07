@@ -35,8 +35,8 @@ ruling) / PROPOSAL (my default, owner may override).
 ## Constraints
 - RULED (2026-08-23 interview): platform matrix = macOS + Linux glibc
   (debian/fedora-class). Alpine/musl and Windows are non-goals.
-- DERIVED: zig must be 0.15.x (vendored `build.zig` requirement; CI pins
-  0.15.2); Rust toolchain is pinned by `rust-toolchain.toml` (1.96.1), so the
+- DERIVED: zig must be 0.16.x since the 2026-10-07 upstream sync (vendored
+  `build.zig` requirement; CI pins 0.16.0, was 0.15.2); Rust toolchain is pinned by `rust-toolchain.toml` (1.96.1), so the
   script must not carry its own Rust version logic.
 - DERIVED: the script runs from a git checkout of the fork (it `cd`s to its
   own directory and builds `--locked`).
@@ -56,7 +56,10 @@ ruling) / PROPOSAL (my default, owner may override).
   was right, its repo-local copy and no Rust/PATH handling were not.
 - REJECTED (by evidence, 2026-08-23): the official zig 0.15.2 macOS tarball -
   cannot link libSystem on Xcode 26.4+ SDKs (arm64e-only tbd); brew's
-  `zig@0.15` carries the backported fix.
+  `zig@0.15` carries the backported fix. SUPERSEDED 2026-10-07: zig 0.16.0
+  (2026-04-13) ships that Mach-O fix (ziglang/zig#31673, merged 2026-03-27)
+  and the macOS 26.4 headers, so the script now fetches the official tarball
+  on both OSes and the brew/patched-lib path is gone.
 - REJECTED: a fake `$HOME` as a full-build sandbox on macOS (rustup, cargo,
   zig all key off `$HOME`); valid only for the PATH section in isolation.
 - REJECTED: the official installer's approach of merely printing a PATH hint -

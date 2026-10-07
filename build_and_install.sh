@@ -3,17 +3,16 @@
 #
 # - Installs Rust via rustup if rustup is missing (rust-toolchain.toml pins the
 #   exact toolchain; rustup honors it on first use - a distro cargo would not).
-# - Zig 0.15 for the vendored libghostty-vt (build.rs shells out to $ZIG).
-#   macOS uses Homebrew's zig@0.15: it backports the MachO linker fix for
-#   Xcode 26.4+ SDKs (libSystem.tbd only lists arm64e now), which the official
-#   0.15.2 tarball lacks, so the tarball cannot link on current macOS. Linux
-#   fetches the official tarball into ~/.local/share/herdr.
+# - Zig 0.16 for the vendored libghostty-vt (its build.rs shells out to $ZIG),
+#   fetched as the official tarball into ~/.local/share/herdr on both OSes.
+#   0.16.0 carries the Mach-O fix for Xcode 26.4+ SDKs (libSystem.tbd lists
+#   only arm64e) and the macOS 26.4 headers, so no brew zig or patched lib dir.
 # - Adds ~/.local/bin to PATH in your shell's config if it is not there yet.
 set -euo pipefail
 
 cd "$(dirname "$0")"
 
-ZIG_VERSION=0.15.2
+ZIG_VERSION=0.16.0
 INSTALL_DIR="$HOME/.local/bin"
 DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/herdr"
 
@@ -22,8 +21,8 @@ need() {
 }
 
 case "$(uname -s)" in
-    Darwin) os=macos; need brew; need perl ;;
-    Linux) os=linux; need xz ;;  # xz unpacks the zig tarball
+    Darwin) os=macos ;;
+    Linux) os=linux; need xz ;;  # GNU tar needs xz for the zig tarball
     *) echo "unsupported OS: $(uname -s)" >&2; exit 1 ;;
 esac
 need cc  # links the Rust crates
@@ -40,44 +39,23 @@ export PATH="$HOME/.cargo/bin:$PATH"
 
 # --- zig ----------------------------------------------------------------------
 mkdir -p "$DATA_DIR"
-if [ "$os" = macos ]; then
-    brew list zig@0.15 >/dev/null 2>&1 || HOMEBREW_NO_AUTO_UPDATE=1 brew install zig@0.15
-    zig_prefix="$(brew --prefix zig@0.15)"
-    zig_ver="$("$zig_prefix/bin/zig" version)"
-    # The macOS 26 SDK no longer exposes INFINITY to zig 0.15's bundled libcxx,
-    # which breaks the vendored build. Patch a private copy of the lib dir
-    # (never the brew keg) and point a wrapper at it; goes away when upstream
-    # moves to zig 0.16 (herdrdev/herdr#285).
-    ziglib="$DATA_DIR/zig-lib-$zig_ver-patched"
-    if [ ! -d "$ziglib" ]; then
-        echo "creating patched copy of zig $zig_ver lib dir at $ziglib"
-        rm -rf "$ziglib.tmp"
-        cp -R "$zig_prefix/lib/zig" "$ziglib.tmp"
-        perl -0pi -e 's/_LIBCPP_BEGIN_NAMESPACE_STD/#ifndef INFINITY\n#  define INFINITY __builtin_inff()\n#endif\n\n_LIBCPP_BEGIN_NAMESPACE_STD/' \
-            "$ziglib.tmp/libcxx/include/__random/clamp_to_integral.h"
-        mv "$ziglib.tmp" "$ziglib"
-    fi
-    zig="$DATA_DIR/zig"
-    printf '#!/bin/sh\nexec "%s" "$@" --zig-lib-dir "%s"\n' "$zig_prefix/bin/zig" "$ziglib" > "$zig"
-    chmod +x "$zig"
-else
-    case "$(uname -m)" in
-        aarch64 | arm64) arch=aarch64 ;;
-        x86_64 | amd64) arch=x86_64 ;;
-        *) echo "unsupported arch: $(uname -m)" >&2; exit 1 ;;
-    esac
-    zig_dir="$DATA_DIR/zig-$arch-linux-$ZIG_VERSION"
-    if [ ! -x "$zig_dir/zig" ]; then
-        echo "fetching zig $ZIG_VERSION into $DATA_DIR"
-        tmp="$(mktemp -d "$DATA_DIR/.zig-XXXXXX")"
-        trap 'rm -rf "$tmp"' EXIT
-        curl --proto '=https' --tlsv1.2 -sSfL \
-            "https://ziglang.org/download/$ZIG_VERSION/zig-$arch-linux-$ZIG_VERSION.tar.xz" \
-            | tar -xJ -C "$tmp"
-        mv "$tmp/zig-$arch-linux-$ZIG_VERSION" "$zig_dir"
-    fi
-    zig="$zig_dir/zig"
+case "$(uname -m)" in
+    aarch64 | arm64) arch=aarch64 ;;
+    x86_64 | amd64) arch=x86_64 ;;
+    *) echo "unsupported arch: $(uname -m)" >&2; exit 1 ;;
+esac
+zig_name="zig-$arch-$os-$ZIG_VERSION"
+zig_dir="$DATA_DIR/$zig_name"
+if [ ! -x "$zig_dir/zig" ]; then
+    echo "fetching zig $ZIG_VERSION into $DATA_DIR"
+    tmp="$(mktemp -d "$DATA_DIR/.zig-XXXXXX")"
+    trap 'rm -rf "$tmp"' EXIT
+    curl --proto '=https' --tlsv1.2 -sSfL \
+        "https://ziglang.org/download/$ZIG_VERSION/$zig_name.tar.xz" \
+        | tar -xJ -C "$tmp"
+    mv "$tmp/$zig_name" "$zig_dir"
 fi
+zig="$zig_dir/zig"
 export ZIG="$zig"
 
 # --- build + install ----------------------------------------------------------
